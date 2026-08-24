@@ -1,4 +1,4 @@
-export type DiffType = 'komisyon-hatasi' | 'desi-farki' | 'iade-duzeltmesi';
+export type DiffType = 'komisyon' | 'desi' | 'iade' | 'diger';
 
 export interface DisputeOrder {
   id: string;
@@ -9,7 +9,8 @@ export interface DisputeOrder {
 }
 
 export const diffTypeLabels: Record<DiffType, string> = {
-  'komisyon-hatasi': 'Komisyon hatası',
-  'desi-farki': 'Desi farkı',
-  'iade-duzeltmesi': 'İade düzeltmesi',
+  komisyon: 'Komisyon hatası',
+  desi: 'Desi farkı',
+  iade: 'İade düzeltmesi',
+  diger: 'Diğer',
 };
