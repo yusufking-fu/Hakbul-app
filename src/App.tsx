@@ -8,6 +8,10 @@ import StoreConnectionPage from '@/pages/StoreConnectionPage';
 import DashboardPage from '@/pages/DashboardPage';
 import DisputeDraftPage from '@/pages/DisputeDraftPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
+import MesafeliSatisSozlesmesiPage from '@/pages/MesafeliSatisSozlesmesiPage';
+import IptalIadePage from '@/pages/IptalIadePage';
+import GizlilikKvkkPage from '@/pages/GizlilikKvkkPage';
+import IletisimPage from '@/pages/IletisimPage';
 
 function App() {
   return (
@@ -49,6 +53,10 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/mesafeli-satis-sozlesmesi" element={<MesafeliSatisSozlesmesiPage />} />
+          <Route path="/iptal-iade" element={<IptalIadePage />} />
+          <Route path="/gizlilik-kvkk" element={<GizlilikKvkkPage />} />
+          <Route path="/iletisim" element={<IletisimPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
