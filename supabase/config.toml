@@ -9,3 +9,6 @@ verify_jwt = true
 
 [functions.shopier-webhook]
 verify_jwt = false
+
+[functions.shopier-setup-webhook]
+verify_jwt = false
