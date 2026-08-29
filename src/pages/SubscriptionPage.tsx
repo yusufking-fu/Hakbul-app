@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CircleCheck as CheckCircle2, ExternalLink, ShieldCheck } from 'lucide-react';
 import { formatTL } from '@/lib/format';
 
 const ABONELIK_TUTAR = 500;
