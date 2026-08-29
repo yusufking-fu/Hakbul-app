@@ -1,0 +1,11 @@
+[functions.paytr-baslat]
+verify_jwt = true
+
+[functions.paytr-callback]
+verify_jwt = false
+
+[functions.trendyol-sync]
+verify_jwt = true
+
+[functions.shopier-webhook]
+verify_jwt = false
