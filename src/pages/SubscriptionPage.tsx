@@ -3,7 +3,7 @@ import { ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck } from 'lucide-react
 import { formatTL } from '@/lib/format';
 
 const ABONELIK_TUTAR = 500;
-const SHOPIER_PRODUCT_URL = 'https://www.shopier.com/marketplace/product/hakbul-abonelik';
+const SHOPIER_PRODUCT_URL = 'https://www.shopier.com/Hakbulapp/50331075';
 
 export default function SubscriptionPage() {
   return (
