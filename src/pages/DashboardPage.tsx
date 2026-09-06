@@ -319,13 +319,22 @@ export default function DashboardPage() {
             <div className="text-xs text-hb-muted">
               {farkTuruEtiketleri[farkKalemleri[0]?.fark_turu] ?? 'Fark türü'} dahil {tutarsizlikSayisi} siparişte tutarsızlık tespit edildi.
             </div>
-            <Link
-              to="/itiraz-taslagi"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <FileSpreadsheet size={16} />
-              İtiraz taslağı oluştur
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link
+                to="/uyari-merkezi"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <AlertTriangle size={16} />
+                Uyarı Merkezi
+              </Link>
+              <Link
+                to="/itiraz-taslagi"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <FileSpreadsheet size={16} />
+                İtiraz taslağı oluştur
+              </Link>
+            </div>
           </div>
         )}
       </main>

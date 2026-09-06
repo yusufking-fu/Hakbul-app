@@ -44,10 +44,9 @@ export default function GizlilikKvkkPage() {
       <section>
         <h2 className="font-serif text-lg font-semibold text-hb-text">Veri Sorumlusu</h2>
         <p className="mt-2">
-          <strong className="text-hb-text">Veri Sorumlusu / Hizmet Sağlayıcı:</strong> Evin Kara<br />
+          <strong className="text-hb-text">Veri Sorumlusu / Hizmet Sağlayıcı:</strong> Yusuf Kara<br />
           <strong className="text-hb-text">Marka:</strong> Hakbul<br />
-          <strong className="text-hb-text">E-posta:</strong> hakbuldestek@gmail.com<br />
-          <strong className="text-hb-text">Adres:</strong> Gaziantep, Şehitkamil, Gazikent Mahallesi, Belkıs Sokak, No: 56, Kat: 3
+          <strong className="text-hb-text">E-posta:</strong> hakbuldestek@gmail.com
         </p>
       </section>
     </LegalPageLayout>

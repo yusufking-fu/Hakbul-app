@@ -8,6 +8,7 @@ import StoreConnectionPage from '@/pages/StoreConnectionPage';
 import DashboardPage from '@/pages/DashboardPage';
 import DisputeDraftPage from '@/pages/DisputeDraftPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
+import UyariMerkeziPage from '@/pages/UyariMerkeziPage';
 import MesafeliSatisSozlesmesiPage from '@/pages/MesafeliSatisSozlesmesiPage';
 import IptalIadePage from '@/pages/IptalIadePage';
 import GizlilikKvkkPage from '@/pages/GizlilikKvkkPage';
@@ -50,6 +51,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DisputeDraftPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/uyari-merkezi"
+            element={
+              <ProtectedRoute>
+                <UyariMerkeziPage />
               </ProtectedRoute>
             }
           />
