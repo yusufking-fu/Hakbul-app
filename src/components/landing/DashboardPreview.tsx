@@ -14,7 +14,7 @@ export default function DashboardPreview() {
       <div className="mx-auto max-w-4xl">
         <div className="text-center">
           <h2 className="font-serif text-3xl font-semibold text-hb-text sm:text-4xl">
-            İşte ürün gerçekten böyle görünüyor
+            Hakediş kontrol ekranı böyle görünüyor.
           </h2>
           <p className="mt-3 text-base text-hb-muted">Gerçek bir tarama sonucunun önizlemesi.</p>
         </div>
