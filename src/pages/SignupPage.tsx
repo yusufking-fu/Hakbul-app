@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -101,6 +102,16 @@ export default function SignupPage() {
             {loading ? <Loader2 size={16} className="animate-spin" /> : <>Kayıt ol <ArrowRight size={16} /></>}
           </button>
         </form>
+
+        <div className="mt-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-hb-border" />
+          <span className="text-xs text-hb-muted">veya</span>
+          <div className="h-px flex-1 bg-hb-border" />
+        </div>
+
+        <div className="mt-5">
+          <GoogleSignInButton />
+        </div>
 
         <p className="mt-6 text-center text-sm text-hb-muted">
           Zaten hesabın var mı?{' '}
