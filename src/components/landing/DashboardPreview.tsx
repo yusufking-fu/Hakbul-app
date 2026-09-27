@@ -35,9 +35,10 @@ export default function DashboardPreview() {
       <div className="mx-auto max-w-4xl">
         <div className="text-center">
           <h2 className="font-serif text-3xl font-semibold text-hb-text sm:text-4xl">
-            Hakediş kontrol ekranı böyle görünüyor.
+            Hakedişinizdeki farkları keşfedin.
           </h2>
-          <p className="mt-3 text-base text-hb-muted">Gerçek bir tarama sonucunun önizlemesi.</p>
+          <p className="mt-3 text-base text-hb-muted">Hakbul'un örnek hakediş analiz raporunu inceleyin.</p>
+          <p className="mt-1 text-xs text-hb-muted/60">Örnek demo verileriyle hazırlanmıştır.</p>
         </div>
 
         <div className="mt-12 overflow-hidden rounded-2xl border border-hb-border bg-hb-surface shadow-2xl shadow-black/40">
