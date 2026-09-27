@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
-import { Check } from 'lucide-react';
+import { Check, ExternalLink } from 'lucide-react';
+
+const SHOPIER_PRODUCT_URL = 'https://www.shopier.com/Hakbulapp/50331075';
 
 const included = [
   'Otomatik hakediş doğrulama',
@@ -31,12 +32,15 @@ export default function PricingSection() {
             ))}
           </ul>
 
-          <Link
-            to="/kayit"
-            className="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-hb-primary px-6 py-3.5 text-base font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+          <a
+            href={SHOPIER_PRODUCT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-hb-primary px-6 py-3.5 text-base font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            Ücretsiz Tara
-          </Link>
+            <ExternalLink size={18} />
+            Pro'ya Katıl
+          </a>
 
           <p className="mt-4 text-xs text-hb-muted">İlk taramada kart bilgisi gerekmez</p>
         </div>
