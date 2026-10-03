@@ -13,6 +13,7 @@ import MesafeliSatisSozlesmesiPage from '@/pages/MesafeliSatisSozlesmesiPage';
 import IptalIadePage from '@/pages/IptalIadePage';
 import GizlilikKvkkPage from '@/pages/GizlilikKvkkPage';
 import IletisimPage from '@/pages/IletisimPage';
+import { Analytics } from '@vercel/analytics/react';
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
           <Route path="/iletisim" element={<IletisimPage />} />
         </Routes>
       </BrowserRouter>
+      <Analytics />
     </AuthProvider>
   );
 }
