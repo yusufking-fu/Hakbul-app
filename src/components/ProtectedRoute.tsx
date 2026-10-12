@@ -4,8 +4,6 @@ import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
 import { Loader2 } from 'lucide-react';
 
-const DEMO_ALLOWED_EMAIL = 'karaayusf2027@gmail.com';
-
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
   const { isDemo } = useDemoMode();
@@ -27,7 +25,6 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
 
 export function DemoEntryRoute() {
   const { enterDemo } = useDemoMode();
-  const { session, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,17 +38,9 @@ export function DemoEntryRoute() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
-
-    const email = session?.user?.email;
-    if (!session || email !== DEMO_ALLOWED_EMAIL) {
-      navigate('/', { replace: true });
-      return;
-    }
-
     enterDemo();
     navigate('/dashboard', { replace: true });
-  }, [session, loading, enterDemo, navigate]);
+  }, [enterDemo, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-hb-bg">

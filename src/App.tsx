@@ -23,7 +23,7 @@ function App() {
       <DemoModeProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/demo" element={<DemoEntryRoute />} />
+          <Route path="/demo-x7k29fq81m" element={<DemoEntryRoute />} />
           <Route path="/" element={<LandingPage />} />
           <Route path="/kayit" element={<SignupPage />} />
           <Route path="/giris" element={<LoginPage />} />
