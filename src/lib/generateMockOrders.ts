@@ -18,7 +18,7 @@ interface MockSiparisSablon {
   fark_simulasyonu: number;
 }
 
-const siparisSablonlari: MockSiparisSablon[] = [
+export const siparisSablonlari: MockSiparisSablon[] = [
   {
     urun_adi: 'Pamuklu Basic T-Shirt (Beyaz, M)',
     kategori: 'Giyim',

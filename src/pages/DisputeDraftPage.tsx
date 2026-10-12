@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CircleAlert as AlertCircle, ArrowLeft, CircleCheck as CheckCircle2, Download, Info, Loader as Loader2, FileText, Clock } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CircleAlert as AlertCircle, ArrowLeft, CircleCheck as CheckCircle2, Download, Info, Loader as Loader2, FileText, Clock, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useDemoMode } from '@/lib/demoMode';
 import { diffTypeLabels, DiffType } from '@/types/dispute';
 import { formatTL } from '@/lib/format';
 import { exportDisputeExcel } from '@/lib/exportExcel';
@@ -76,6 +77,8 @@ function formatDate(dateStr: string): string {
 
 export default function DisputeDraftPage() {
   const { user } = useAuth();
+  const { isDemo, demoData, setDemoItirazlar } = useDemoMode();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<DisputeOrderRow[]>([]);
@@ -89,6 +92,48 @@ export default function DisputeDraftPage() {
 
   useEffect(() => {
     async function loadData() {
+      if (isDemo) {
+        if (!demoData) {
+          setLoading(false);
+          return;
+        }
+        setMagazaId(demoData.magaza_id);
+
+        const itirazEdilmisIds = new Set(demoData.itirazlar.map((i) => i.fark_kalem_id));
+        setExistingItirazIds(itirazEdilmisIds);
+
+        const disputeRows: DisputeOrderRow[] = demoData.farkKalemleri
+          .filter((f) => Math.abs(f.fark) >= 0.01 && !itirazEdilmisIds.has(f.id))
+          .map((f) => {
+            const siparis = demoData.siparisler[f.siparis_id];
+            return {
+              id: f.id,
+              productName: siparis?.urun_adi ?? 'Bilinmeyen ürün',
+              orderNumber: siparis?.siparis_no ?? '—',
+              diffType: (f.fark_turu as DiffType) || 'diger',
+              diffAmount: Math.abs(f.fark),
+            };
+          });
+        setOrders(disputeRows);
+        setSelectedIds(new Set(disputeRows.map((o) => o.id)));
+
+        const pastRows: PastItirazRow[] = demoData.itirazlar.map((itiraz) => {
+          const kalem = demoData.farkKalemleri.find((k) => k.id === itiraz.fark_kalem_id);
+          const siparis = kalem ? demoData.siparisler[kalem.siparis_id] : null;
+          return {
+            id: itiraz.id,
+            productName: siparis?.urun_adi ?? 'Bilinmeyen ürün',
+            orderNumber: siparis?.siparis_no ?? '—',
+            durum: itiraz.durum,
+            toplam_tutar: itiraz.toplam_tutar,
+            olusturma_tarihi: itiraz.olusturma_tarihi,
+          };
+        });
+        setPastItirazlar(pastRows);
+        setLoading(false);
+        return;
+      }
+
       if (!user?.id) return;
 
       try {
@@ -232,7 +277,7 @@ export default function DisputeDraftPage() {
     }
 
     loadData();
-  }, [user?.id]);
+  }, [user?.id, isDemo, demoData]);
 
   const toggleOrder = (id: string) => {
     setSelectedIds((prev) => {

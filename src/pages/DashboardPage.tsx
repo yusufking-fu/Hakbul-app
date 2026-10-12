@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
-import { CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Loader2, Store, ArrowRight, Lock } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Loader2, Store, ArrowRight, Lock, Eye } from 'lucide-react';
 
 interface FarkKalemi {
   id: string;
@@ -45,6 +46,8 @@ const farkTuruEtiketleri: Record<string, string> = {
 
 export default function DashboardPage() {
   const { user, signOut } = useAuth();
+  const { isDemo, demoData, exitDemo } = useDemoMode();
+  const navigate = useNavigate();
   const [donem, setDonem] = useState<Donem | null>(null);
   const [siparisler, setSiparisler] = useState<Record<string, Siparis>>({});
   const [farkKalemleri, setFarkKalemleri] = useState<FarkKalemi[]>([]);
@@ -54,6 +57,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadData() {
+      if (isDemo) {
+        if (!demoData) {
+          setLoading(false);
+          return;
+        }
+        setDonem(demoData.donem);
+        setSiparisler(demoData.siparisler);
+        setFarkKalemleri(demoData.farkKalemleri);
+        setAbonelikDurumu('aktif');
+        setLoading(false);
+        return;
+      }
+
       if (!user?.id) return;
 
       // Kullanıcının abonelik durumunu kontrol et
@@ -127,7 +143,7 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, [user?.id]);
+  }, [user?.id, isDemo, demoData]);
 
   const tutarsizlikSayisi = farkKalemleri.filter((f) => Math.abs(f.fark) >= 0.01).length;
   const toplamSiparis = farkKalemleri.length;
@@ -145,10 +161,19 @@ export default function DashboardPage() {
     );
   }
 
+  const handleSignOut = () => {
+    if (isDemo) {
+      exitDemo();
+      navigate('/');
+    } else {
+      signOut();
+    }
+  };
+
   if (!hasStore) {
     return (
       <div className="min-h-screen bg-hb-bg">
-        <DashboardHeader email={user?.email} onSignOut={signOut} />
+        <DashboardHeader email={isDemo ? undefined : user?.email} onSignOut={handleSignOut} isDemo={isDemo} />
         <main className="mx-auto max-w-2xl px-5 py-12 sm:px-8">
           <div className="rounded-2xl border border-hb-border bg-hb-surface p-10 text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-hb-primary/10 text-hb-primary">
@@ -173,7 +198,7 @@ export default function DashboardPage() {
   if (!donem) {
     return (
       <div className="min-h-screen bg-hb-bg">
-        <DashboardHeader email={user?.email} onSignOut={signOut} />
+        <DashboardHeader email={isDemo ? undefined : user?.email} onSignOut={handleSignOut} isDemo={isDemo} />
         <main className="mx-auto max-w-2xl px-5 py-12 sm:px-8">
           <div className="rounded-2xl border border-hb-border bg-hb-surface p-10 text-center">
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-hb-primary/10 text-hb-primary">
@@ -189,11 +214,11 @@ export default function DashboardPage() {
     );
   }
 
-  const isTrial = abonelikDurumu !== 'aktif';
+  const isTrial = isDemo ? false : abonelikDurumu !== 'aktif';
 
   return (
     <div className="min-h-screen bg-hb-bg">
-      <DashboardHeader email={user?.email} onSignOut={signOut} />
+      <DashboardHeader email={isDemo ? undefined : user?.email} onSignOut={handleSignOut} isDemo={isDemo} />
 
       <main className="mx-auto max-w-5xl px-5 py-8 sm:px-8">
         {/* Üst özet kartı */}
@@ -342,7 +367,7 @@ export default function DashboardPage() {
   );
 }
 
-function DashboardHeader({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
+function DashboardHeader({ email, onSignOut, isDemo }: { email?: string; onSignOut: () => void; isDemo?: boolean }) {
   return (
     <header className="border-b border-hb-border px-5 py-4 sm:px-8">
       <div className="mx-auto flex max-w-5xl items-center justify-between">
@@ -351,6 +376,12 @@ function DashboardHeader({ email, onSignOut }: { email?: string; onSignOut: () =
             H
           </span>
           <span className="font-serif text-lg font-semibold text-hb-text">HakBul</span>
+          {isDemo && (
+            <span className="flex items-center gap-1 rounded-full border border-hb-secondary/30 bg-hb-secondary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-hb-secondary">
+              <Eye size={10} />
+              Demo
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
           {email && (
@@ -361,7 +392,7 @@ function DashboardHeader({ email, onSignOut }: { email?: string; onSignOut: () =
             className="flex items-center gap-2 rounded-lg border border-hb-border px-3 py-2 text-sm text-hb-muted transition-colors hover:border-hb-muted hover:text-hb-text"
           >
             <LogOut size={16} />
-            Çıkış
+            {isDemo ? 'Demodan Çık' : 'Çıkış'}
           </button>
         </div>
       </div>

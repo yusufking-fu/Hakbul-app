@@ -14,12 +14,16 @@ import IptalIadePage from '@/pages/IptalIadePage';
 import GizlilikKvkkPage from '@/pages/GizlilikKvkkPage';
 import IletisimPage from '@/pages/IletisimPage';
 import { Analytics } from '@vercel/analytics/react';
+import { DemoModeProvider } from '@/lib/demoMode';
+import { DemoEntryRoute } from '@/components/ProtectedRoute';
 
 function App() {
   return (
     <AuthProvider>
+      <DemoModeProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/demo" element={<DemoEntryRoute />} />
           <Route path="/" element={<LandingPage />} />
           <Route path="/kayit" element={<SignupPage />} />
           <Route path="/giris" element={<LoginPage />} />
@@ -70,6 +74,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       <Analytics />
+      </DemoModeProvider>
     </AuthProvider>
   );
 }
