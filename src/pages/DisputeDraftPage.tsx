@@ -307,8 +307,52 @@ export default function DisputeDraftPage() {
   };
 
   const handleCreateItiraz = async () => {
-    if (selectedOrders.length === 0 || !magazaId || !user?.id) return;
+    if (selectedOrders.length === 0 || !magazaId) return;
 
+    if (isDemo) {
+      setSubmitting(true);
+      setSubmitError(null);
+
+      const newItirazlar = selectedOrders.map((order) => ({
+        id: `demo-itiraz-${Date.now()}-${order.id}`,
+        fark_kalem_id: order.id,
+        magaza_id: magazaId,
+        durum: 'acik',
+        toplam_tutar: order.diffAmount,
+        olusturma_tarihi: new Date().toISOString(),
+        aciklama: null,
+      }));
+
+      const updatedItirazlar = [...newItirazlar, ...(demoData?.itirazlar ?? [])];
+      setDemoItirazlar(updatedItirazlar);
+
+      setSubmitSuccess(true);
+      setExistingItirazIds((prev) => {
+        const next = new Set(prev);
+        selectedOrders.forEach((o) => next.add(o.id));
+        return next;
+      });
+      setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
+      setSelectedIds(new Set());
+
+      const pastRows: PastItirazRow[] = updatedItirazlar.map((itiraz) => {
+        const kalem = demoData?.farkKalemleri.find((k) => k.id === itiraz.fark_kalem_id);
+        const siparis = kalem ? demoData?.siparisler[kalem.siparis_id] : null;
+        return {
+          id: itiraz.id,
+          productName: siparis?.urun_adi ?? 'Bilinmeyen ürün',
+          orderNumber: siparis?.siparis_no ?? '—',
+          durum: itiraz.durum,
+          toplam_tutar: itiraz.toplam_tutar,
+          olusturma_tarihi: itiraz.olusturma_tarihi,
+        };
+      });
+      setPastItirazlar(pastRows);
+      setSubmitting(false);
+      return;
+    }
+
+    if (!user?.id) return;
     setSubmitting(true);
     setSubmitError(null);
 
@@ -334,17 +378,14 @@ export default function DisputeDraftPage() {
       }
 
       setSubmitSuccess(true);
-      // Seçilen kalemleri mevcut itiraz listesine taşı
       setExistingItirazIds((prev) => {
         const next = new Set(prev);
         selectedOrders.forEach((o) => next.add(o.id));
         return next;
       });
-      // İtiraz edilecek listeden kaldır
       setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
       setSelectedIds(new Set());
 
-      // Geçmiş itirazları yeniden yükle
       const { data: guncelItirazlar } = await supabase
         .from('itirazlar')
         .select('id, fark_kalem_id, durum, toplam_tutar, olusturma_tarihi, aciklama')
@@ -401,7 +442,7 @@ export default function DisputeDraftPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-hb-bg">
-        <DisputeHeader />
+        <DisputeHeader isDemo={isDemo} />
         <div className="flex items-center justify-center py-20">
           <Loader2 size={28} className="animate-spin text-hb-primary" />
         </div>
@@ -412,7 +453,7 @@ export default function DisputeDraftPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-hb-bg">
-        <DisputeHeader />
+        <DisputeHeader isDemo={isDemo} />
         <main className="mx-auto max-w-3xl px-5 py-8 sm:px-8">
           <div className="flex items-start gap-3 rounded-xl border border-hb-secondary/30 bg-hb-secondary/10 p-5">
             <AlertCircle size={20} className="mt-0.5 shrink-0 text-hb-secondary" />
@@ -601,7 +642,7 @@ export default function DisputeDraftPage() {
   );
 }
 
-function DisputeHeader() {
+function DisputeHeader({ isDemo }: { isDemo?: boolean }) {
   return (
     <header className="sticky top-0 z-10 border-b border-hb-border bg-hb-bg/95 px-5 py-4 backdrop-blur sm:px-8">
       <div className="mx-auto flex max-w-3xl items-center gap-3">
@@ -613,6 +654,12 @@ function DisputeHeader() {
           <ArrowLeft size={18} />
         </Link>
         <h1 className="font-serif text-xl font-semibold text-hb-text">İtiraz Taslağı</h1>
+        {isDemo && (
+          <span className="flex items-center gap-1 rounded-full border border-hb-secondary/30 bg-hb-secondary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-hb-secondary">
+            <Eye size={10} />
+            Demo - örnek veri
+          </span>
+        )}
       </div>
     </header>
   );

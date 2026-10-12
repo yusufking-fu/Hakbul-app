@@ -24,22 +24,13 @@ export default function Hero() {
           takip ediyoruz.
         </p>
 
-        <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
-          <Link
-            to="/kayit"
-            className="inline-flex items-center gap-2 rounded-xl bg-hb-primary px-7 py-3.5 text-base font-semibold text-hb-bg shadow-glow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            Ücretsiz Tara
-            <ArrowRight size={18} />
-          </Link>
-          <Link
-            to="/demo"
-            className="inline-flex items-center gap-2 rounded-xl border border-hb-border bg-hb-surface px-7 py-3.5 text-base font-semibold text-hb-text transition-colors hover:border-hb-muted"
-          >
-            Demo Modu
-            <ArrowRight size={18} />
-          </Link>
-        </div>
+        <Link
+          to="/kayit"
+          className="mt-10 inline-flex items-center gap-2 rounded-xl bg-hb-primary px-7 py-3.5 text-base font-semibold text-hb-bg shadow-glow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+        >
+          Ücretsiz Tara
+          <ArrowRight size={18} />
+        </Link>
       </div>
     </section>
   );

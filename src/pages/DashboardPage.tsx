@@ -379,7 +379,7 @@ function DashboardHeader({ email, onSignOut, isDemo }: { email?: string; onSignO
           {isDemo && (
             <span className="flex items-center gap-1 rounded-full border border-hb-secondary/30 bg-hb-secondary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-hb-secondary">
               <Eye size={10} />
-              Demo
+              Demo - örnek veri
             </span>
           )}
         </div>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
 import { diffTypeLabels, DiffType } from '@/types/dispute';
 
@@ -61,11 +62,43 @@ function formatDate(dateStr: string): string {
 
 export default function UyariMerkeziPage() {
   const { user, signOut } = useAuth();
+  const { isDemo, demoData, exitDemo } = useDemoMode();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [uyariItems, setUyariItems] = useState<UyariItem[]>([]);
 
   useEffect(() => {
     async function loadData() {
+      if (isDemo) {
+        if (!demoData) {
+          setLoading(false);
+          return;
+        }
+
+        const itirazEdilmisIds = new Set(demoData.itirazlar.map((i) => i.fark_kalem_id));
+        const itirazEdilmemisKalemler = demoData.farkKalemleri.filter(
+          (f) => !itirazEdilmisIds.has(f.id) && Math.abs(f.fark) >= 0.01
+        );
+
+        const items: UyariItem[] = itirazEdilmemisKalemler.map((f) => {
+          const kalanGun = ITIRAZ_SURESI_GUN - gunFarki(demoData.donem.tarama_tarihi);
+          const siparis = demoData.siparisler[f.siparis_id];
+          return {
+            id: f.id,
+            productName: siparis?.urun_adi ?? 'Bilinmeyen ürün',
+            orderNumber: siparis?.siparis_no ?? '—',
+            diffType: (f.fark_turu as DiffType) || 'diger',
+            diffAmount: Math.abs(f.fark),
+            taramaTarihi: demoData.donem.tarama_tarihi,
+            kalanGun,
+          };
+        });
+
+        setUyariItems(items);
+        setLoading(false);
+        return;
+      }
+
       if (!user?.id) return;
 
       const { data: magazalar } = await supabase
@@ -154,7 +187,7 @@ export default function UyariMerkeziPage() {
     }
 
     loadData();
-  }, [user?.id]);
+  }, [user?.id, isDemo, demoData]);
 
   const yaklasanlar = uyariItems.filter((i) => i.kalanGun > 0 && i.kalanGun <= 3);
   const normalOlanlar = uyariItems.filter((i) => i.kalanGun > 3);
@@ -168,9 +201,13 @@ export default function UyariMerkeziPage() {
     );
   }
 
+  const handleSignOut = isDemo
+    ? () => { exitDemo(); navigate('/'); }
+    : signOut;
+
   return (
     <div className="min-h-screen bg-hb-bg">
-      <UyariHeader email={user?.email} onSignOut={signOut} />
+      <UyariHeader email={isDemo ? undefined : user?.email} onSignOut={handleSignOut} isDemo={isDemo} />
 
       <main className="mx-auto max-w-3xl px-5 py-8 sm:px-8">
         <div className="mb-8">
@@ -359,7 +396,7 @@ function UyariKart({ item, urgent, expired }: { item: UyariItem; urgent?: boolea
   );
 }
 
-function UyariHeader({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
+function UyariHeader({ email, onSignOut, isDemo }: { email?: string; onSignOut: () => void; isDemo?: boolean }) {
   return (
     <header className="border-b border-hb-border px-5 py-4 sm:px-8">
       <div className="mx-auto flex max-w-3xl items-center justify-between">
@@ -376,6 +413,12 @@ function UyariHeader({ email, onSignOut }: { email?: string; onSignOut: () => vo
               H
             </span>
             <span className="font-serif text-lg font-semibold text-hb-text">HakBul</span>
+            {isDemo && (
+              <span className="flex items-center gap-1 rounded-full border border-hb-secondary/30 bg-hb-secondary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-hb-secondary">
+                <Eye size={10} />
+                Demo - örnek veri
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -384,7 +427,7 @@ function UyariHeader({ email, onSignOut }: { email?: string; onSignOut: () => vo
             onClick={onSignOut}
             className="flex items-center gap-2 rounded-lg border border-hb-border px-3 py-2 text-sm text-hb-muted transition-colors hover:border-hb-muted hover:text-hb-text"
           >
-            Çıkış
+            {isDemo ? 'Demodan Çık' : 'Çıkış'}
           </button>
         </div>
       </div>
