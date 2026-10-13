@@ -3,3 +3,6 @@ verify_jwt = true
 
 [functions.shopier-webhook]
 verify_jwt = false
+
+[functions.excel-upload]
+verify_jwt = true

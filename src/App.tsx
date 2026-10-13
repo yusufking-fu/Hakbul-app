@@ -5,6 +5,8 @@ import LandingPage from '@/pages/LandingPage';
 import SignupPage from '@/pages/SignupPage';
 import LoginPage from '@/pages/LoginPage';
 import StoreConnectionPage from '@/pages/StoreConnectionPage';
+import MethodChooserPage from '@/pages/MethodChooserPage';
+import ExcelUploadPage from '@/pages/ExcelUploadPage';
 import DashboardPage from '@/pages/DashboardPage';
 import DisputeDraftPage from '@/pages/DisputeDraftPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
@@ -27,6 +29,22 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/kayit" element={<SignupPage />} />
           <Route path="/giris" element={<LoginPage />} />
+          <Route
+            path="/kontrol-sec"
+            element={
+              <ProtectedRoute>
+                <MethodChooserPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/excel-kontrol"
+            element={
+              <ProtectedRoute>
+                <ExcelUploadPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/magaza-baglantisi"
             element={

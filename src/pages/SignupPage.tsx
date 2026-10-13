@@ -34,7 +34,7 @@ export default function SignupPage() {
       return;
     }
 
-    navigate('/magaza-baglantisi');
+    navigate('/kontrol-sec');
   };
 
   return (

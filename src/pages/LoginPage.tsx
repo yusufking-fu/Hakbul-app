@@ -24,7 +24,7 @@ export default function LoginPage() {
       return;
     }
 
-    navigate('/magaza-baglantisi');
+    navigate('/kontrol-sec');
   };
 
   return (
