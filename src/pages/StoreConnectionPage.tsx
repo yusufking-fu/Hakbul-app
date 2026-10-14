@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { generateMockOrders } from '@/lib/generateMockOrders';
@@ -110,13 +110,23 @@ export default function StoreConnectionPage() {
   return (
     <div className="min-h-screen bg-hb-bg px-5 py-12 sm:px-8">
       <div className="mx-auto max-w-md">
-        <Link
-          to="/"
-          className="mb-8 inline-flex items-center gap-2 text-sm text-hb-muted transition-colors hover:text-hb-text"
-        >
-          <ArrowLeft size={16} />
-          Ana sayfa
-        </Link>
+        <div className="mb-8 flex items-center gap-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-sm text-hb-muted transition-colors hover:text-hb-text"
+          >
+            <ArrowLeft size={16} />
+            Ana sayfa
+          </Link>
+          <span className="text-hb-border">|</span>
+          <Link
+            to="/excel-kontrol"
+            className="inline-flex items-center gap-2 text-sm font-medium text-hb-primary transition-colors hover:text-hb-primary/80"
+          >
+            <FileSpreadsheet size={16} />
+            Excel ile kontrol et
+          </Link>
+        </div>
 
         <div className="rounded-2xl border border-hb-border bg-hb-surface p-7 sm:p-8">
           <div className="mb-6">
