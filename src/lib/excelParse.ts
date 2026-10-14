@@ -82,6 +82,14 @@ function parseNumber(val: unknown): number {
   return isNaN(num) ? 0 : num;
 }
 
+function decodeCsvText(data: ArrayBuffer): string {
+  const utf8 = new TextDecoder('utf-8').decode(data);
+  if (/[\u00c0-\u00ff]/.test(utf8) && /Ã|Ä°|Å|Ä±|Ã§|Ã¼|Ã¶/.test(utf8)) {
+    return new TextDecoder('windows-1254').decode(data);
+  }
+  return utf8;
+}
+
 export function parseExcelFile(data: ArrayBuffer): ParsedExcel | ParseError {
   const workbook = XLSX.read(data, { type: 'array' });
   const sheetName = workbook.SheetNames[0];

@@ -1,13 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, FileSpreadsheet, Upload, Loader2, AlertCircle, CheckCircle2,
-  Zap, FileUp, ShieldCheck, Lock,
+  ArrowLeft, Loader2, AlertCircle, CheckCircle2,
+  Zap, FileUp, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { formatTL } from '@/lib/format';
-import { parseExcelFile, isParseError, ParsedExcel, ParseError } from '@/lib/excelParse';
+import { parseExcelFile, isParseError, ParseError } from '@/lib/excelParse';
 import { analyzeExcelRows, AnalizSonuc } from '@/lib/excelAnalyze';
 import { DiffType, diffTypeLabels } from '@/types/dispute';
 
@@ -20,7 +20,6 @@ export default function ExcelUploadPage() {
   const [step, setStep] = useState<Step>('idle');
   const [fileName, setFileName] = useState('');
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
-  const [parseResult, setParseResult] = useState<ParsedExcel | null>(null);
   const [parseError, setParseError] = useState<ParseError | null>(null);
   const [analiz, setAnaliz] = useState<AnalizSonuc | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -28,7 +27,6 @@ export default function ExcelUploadPage() {
   const handleFile = useCallback(async (file: File) => {
     setStep('parsing');
     setParseError(null);
-    setParseResult(null);
     setAnaliz(null);
     setFileName(file.name);
 
@@ -44,7 +42,6 @@ export default function ExcelUploadPage() {
         return;
       }
 
-      setParseResult(result);
       const sonuc = analyzeExcelRows(result.rows);
       setAnaliz(sonuc);
       setStep('parsed');
@@ -157,6 +154,35 @@ export default function ExcelUploadPage() {
 
       // Group farklar by siparisNo and create siparisler + fark_kalemleri
       const siparisMap = new Map<string, string>();
+
+      // Create a catch-all siparis for orphan farklar (siparisNo = '—')
+      const hasOrphan = analiz.farklar.some((f) => f.siparisNo === '—');
+      if (hasOrphan) {
+        const { data: orphanSiparis, error: orphanErr } = await supabase
+          .from('siparisler')
+          .insert({
+            magaza_id: magazaId,
+            siparis_no: `ORPHAN-${Date.now()}`,
+            urun_adi: 'Sipariş karşılığı olmayan kesintiler',
+            kategori: null,
+            satis_tutari: 0,
+            kargo_tutari: 0,
+            komisyon_orani: 0,
+            teslim_tarihi: null,
+            iade_durumu: false,
+            ham_veri: { kaynak: 'excel', dosya: fileName },
+          })
+          .select()
+          .single();
+
+        if (orphanErr || !orphanSiparis) {
+          setSaveError('Sipariş kaydı oluşturulamadı.');
+          setStep('parsed');
+          return;
+        }
+        siparisMap.set('—', orphanSiparis.id);
+      }
+
       for (const fark of analiz.farklar) {
         if (fark.siparisNo === '—') continue;
         if (siparisMap.has(fark.siparisNo)) continue;
@@ -187,9 +213,10 @@ export default function ExcelUploadPage() {
       }
 
       // Create fark_kalemleri
+      const fallbackSiparisId = Array.from(siparisMap.values())[0] || '';
       const farkKayitlari = analiz.farklar.map((f) => ({
         donem_id: donem.id,
-        siparis_id: siparisMap.get(f.siparisNo) || Object.values(siparisMap.values())[0],
+        siparis_id: siparisMap.get(f.siparisNo) || fallbackSiparisId,
         beklenen_tutar: 0,
         gercek_tutar: 0,
         fark: f.fark,
