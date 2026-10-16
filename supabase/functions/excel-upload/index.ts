@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
@@ -23,19 +23,25 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Authorization required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userClient = createClient(supabaseUrl, authHeader.replace("Bearer ", ""));
-    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    const token = authHeader.replace("Bearer ", "");
+
+    const anonClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    const { data: { user }, error: userError } = await anonClient.auth.getUser();
 
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: "Invalid session" }),
+        JSON.stringify({ error: "Geçersiz oturum. Lütfen tekrar giriş yapın." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -44,7 +50,7 @@ Deno.serve(async (req: Request) => {
     const file = formData.get("file") as File | null;
     if (!file) {
       return new Response(
-        JSON.stringify({ error: "No file provided" }),
+        JSON.stringify({ error: "Dosya bulunamadı." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -67,7 +73,7 @@ Deno.serve(async (req: Request) => {
 
     if (uploadError) {
       return new Response(
-        JSON.stringify({ error: "File upload failed: " + uploadError.message }),
+        JSON.stringify({ error: "Dosya yüklenemedi: " + uploadError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -78,7 +84,7 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err.message || "Unexpected error" }),
+      JSON.stringify({ error: (err as Error).message || "Beklenmeyen hata" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

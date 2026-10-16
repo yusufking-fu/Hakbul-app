@@ -63,26 +63,25 @@ export default function ExcelUploadPage() {
   };
 
   const handleSave = async () => {
-    if (!analiz || !fileData || !user?.id) return;
+    if (!analiz || !fileData) return;
 
     setStep('uploading');
     setSaveError(null);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        navigate('/giris');
+        return;
+      }
+
       const file = new File([fileData], fileName || 'ekstre.xlsx', {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
 
       const formData = new FormData();
       formData.append('file', file);
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        setSaveError('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
-        setStep('parsed');
-        return;
-      }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const uploadRes = await fetch(`${supabaseUrl}/functions/v1/excel-upload`, {
@@ -94,7 +93,7 @@ export default function ExcelUploadPage() {
       });
 
       if (!uploadRes.ok) {
-        const errBody = await uploadRes.json().catch(() => ({}));
+        const errBody = await uploadRes.json().catch(() => ({ error: uploadRes.statusText }));
         setSaveError(`Dosya yüklenemedi: ${errBody.error || uploadRes.statusText}`);
         setStep('parsed');
         return;
@@ -102,11 +101,17 @@ export default function ExcelUploadPage() {
 
       setStep('saving');
 
+      const userId = user?.id || sessionData.session?.user?.id;
+      if (!userId) {
+        navigate('/giris');
+        return;
+      }
+
       // Create a magaza for Excel flow if none exists
       const { data: existingMagaza } = await supabase
         .from('magazalar')
         .select('id')
-        .eq('kullanici_id', user.id)
+        .eq('kullanici_id', userId)
         .maybeSingle();
 
       let magazaId = existingMagaza?.id;
@@ -115,7 +120,7 @@ export default function ExcelUploadPage() {
         const { data: newMagaza, error: magazaErr } = await supabase
           .from('magazalar')
           .insert({
-            kullanici_id: user.id,
+            kullanici_id: userId,
             platform: 'trendyol',
             baglanti_durumu: 'excel',
           })
@@ -226,7 +231,7 @@ export default function ExcelUploadPage() {
       if (farkKayitlari.length > 0) {
         const { error: farkErr } = await supabase.from('fark_kalemleri').insert(farkKayitlari);
         if (farkErr) {
-          setSaveError('Fark kalemleri kaydedilemedi.');
+          setSaveError(`Fark kalemleri kaydedilemedi: ${farkErr.message}`);
           setStep('parsed');
           return;
         }
@@ -235,7 +240,7 @@ export default function ExcelUploadPage() {
       setStep('done');
       setTimeout(() => navigate('/dashboard'), 1200);
     } catch (err) {
-      setSaveError('Beklenmeyen bir hata oluştu.');
+      setSaveError(`Beklenmeyen bir hata oluştu: ${(err as Error).message || 'Bilinmeyen hata'}`);
       setStep('parsed');
     }
   };
@@ -330,7 +335,7 @@ export default function ExcelUploadPage() {
         {/* Parsed — show results */}
         {(step === 'parsed' || step === 'uploading' || step === 'saving') && analiz && (
           <div className="space-y-6">
-            {/* Summary — free for everyone */}
+            {/* Summary */}
             <div className="rounded-2xl border border-hb-border bg-hb-surface p-6 sm:p-8">
               <div className="flex items-center gap-2 text-sm text-hb-muted">
                 <CheckCircle2 size={16} className="text-hb-primary" />
@@ -358,19 +363,19 @@ export default function ExcelUploadPage() {
               </div>
             </div>
 
-            {/* Fark listesi — free */}
+            {/* Fark listesi */}
             {analiz.farklar.length > 0 && (
               <div className="rounded-2xl border border-hb-border bg-hb-surface overflow-hidden">
                 <div className="border-b border-hb-border px-5 py-3.5">
                   <h2 className="font-serif text-base font-semibold text-hb-text">Tespit edilen farklar</h2>
                 </div>
-                <div className="divide-y divide-hb-border max-h-96 overflow-y-auto">
+                <div className="divide-y divide-hb-border max-h-[28rem] overflow-y-auto">
                   {analiz.farklar.map((f) => (
                     <div key={f.id} className="px-5 py-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-hb-text">
-                            {f.urunAdi || 'Bilinmeyen ürün'}
+                            {f.urunAdi || (f.farkTuru === 'ceza' ? 'Ceza/Operasyonel' : 'Bilinmeyen ürün')}
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             {f.siparisNo !== '—' && (
@@ -390,31 +395,6 @@ export default function ExcelUploadPage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* Ceza listesi */}
-            {analiz.cezalar.length > 0 && (
-              <div className="rounded-2xl border border-hb-border bg-hb-surface overflow-hidden">
-                <div className="border-b border-hb-border px-5 py-3.5">
-                  <h2 className="font-serif text-base font-semibold text-hb-text">Ceza ve operasyonel kesintiler</h2>
-                </div>
-                <div className="divide-y divide-hb-border">
-                  {analiz.cezalar.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between gap-4 px-5 py-3.5">
-                      <span className="text-sm text-hb-text">{c.aciklama}</span>
-                      <span className="shrink-0 font-mono text-sm font-medium tabular-nums text-hb-muted">
-                        {formatTL(c.tutar)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between gap-4 bg-hb-bg/40 px-5 py-3.5">
-                    <span className="text-sm font-medium text-hb-muted">Ceza toplamı</span>
-                    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-hb-muted">
-                      {formatTL(analiz.cezaToplami)}
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
@@ -475,7 +455,9 @@ function diffTypeStyle(type: DiffType): string {
   switch (type) {
     case 'komisyon': return 'bg-hb-secondary/10 text-hb-secondary';
     case 'desi': return 'bg-hb-primary/10 text-hb-primary';
-    case 'iade': return 'bg-hb-muted/15 text-hb-muted';
+    case 'iade': return 'bg-amber-500/10 text-amber-600';
+    case 'mukerrer': return 'bg-orange-500/10 text-orange-600';
+    case 'ceza': return 'bg-red-500/10 text-red-600';
     default: return 'bg-hb-muted/15 text-hb-muted';
   }
 }

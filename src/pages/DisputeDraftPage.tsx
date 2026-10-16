@@ -12,6 +12,8 @@ const diffTypeStyles: Record<DiffType, string> = {
   komisyon: 'bg-hb-secondary/10 text-hb-secondary',
   desi: 'bg-hb-primary/10 text-hb-primary',
   iade: 'bg-hb-muted/15 text-hb-muted',
+  mukerrer: 'bg-orange-500/10 text-orange-600',
+  ceza: 'bg-red-500/10 text-red-600',
   diger: 'bg-hb-muted/15 text-hb-muted',
 };
 
