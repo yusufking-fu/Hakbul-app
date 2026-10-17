@@ -249,6 +249,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   for (const order of groupedOrders) {
     const issues = checkOrder(order, referenceRate);
     for (const issue of issues) {
+      // Use the order.siparisNo of the order where the issue was detected
       farklar.push({
         id: `excel-fark-${order.siparisNo}-${issue.type}-${farklar.length}`,
         siparisNo: order.siparisNo,
@@ -327,6 +328,7 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
   const komisyonIadeRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon_iadesi');
   const iadeRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'iade');
 
+  // Kural: Komisyon oranı farkı (her sipariş kendi oranı ile global referansı karşılaştırır)
   if (referenceRate !== null) {
     const orderInfo = getOrderCommissionInfo(order);
     if (orderInfo && orderInfo.oran !== null) {
@@ -336,12 +338,13 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
         results.push({
           type: 'komisyon',
           fark: Math.abs(fark),
-          aciklama: `Referans oran (${referenceRate.toFixed(4)}) ile sipariş oranı (${orderInfo.oran.toFixed(4)}) arasındaki fark: ${(diffRate * 100).toFixed(2)}%.`,
+          aciklama: `Order oranı (${orderInfo.oran.toFixed(6)}) ile referans oran (${referenceRate.toFixed(6)}) arasındaki fark.`,
         });
       }
     }
   }
 
+  // Kural: Aynı siparişte aynı tutarlı ikinci/çoklu komisyonlar mükerrer olarak raporlanır ve oran hesabına dahil edilmez
   if (komisyonRows.length >= 2) {
     const counts = new Map<number, number>();
     for (const row of komisyonRows) {
@@ -354,12 +357,13 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
         results.push({
           type: 'mukerrer',
           fark: amount * (count - 1),
-          aciklama: `Aynı tutarda (${amount.toFixed(2)} TL) komisyon kesintisi tekrarlandı; ikincisi mükerrer kabul edilir.`,
+          aciklama: `Siparişte aynı tutarda ${count} komisyon kesintisi bulundu; fazlalık mükerrer kabul edildi.`,
         });
       }
     }
   }
 
+  // Kural: İade satışında komisyon iadesi eksikse, iade tutarı × referans oran kadar fark yaz
   if (order.hasIade && !order.hasKomisyonIadesi && order.hasKomisyon) {
     const iadeTutari = iadeRows.reduce((sum, row) => sum + Math.abs(row.alacak), 0);
     if (referenceRate !== null && iadeTutari > 0.01) {
@@ -367,25 +371,27 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
       results.push({
         type: 'iade',
         fark,
-        aciklama: `İade satışı var ama komisyon iadesi yok. İade tutarı (${iadeTutari.toFixed(2)} TL) × referans oran (${referenceRate.toFixed(4)}) = ${fark.toFixed(2)} TL.`,
+        aciklama: `İade satışı var fakat komisyon iadesi yok; iade tutarı × referans oran hesaplandı.`,
       });
     }
   }
 
+  // Kargo tekrarları
   const kargoRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'kargo');
   if (kargoRows.length > 1) {
     const tutarlar = kargoRows.map((r) => Math.abs(r.borc));
-    const toplamKargo = tutarlar.reduce((sum, value) => sum + value, 0);
+    const toplamKargo = tutarlar.reduce((s, v) => s + v, 0);
     const enBuyuk = Math.max(...tutarlar);
     if (toplamKargo - enBuyuk > 0.5) {
       results.push({
         type: 'mukerrer',
         fark: toplamKargo - enBuyuk,
-        aciklama: `${kargoRows.length} adet kargo kesintisi bulunuyor. Mükerrer kargo olabilir.`,
+        aciklama: `Mükerrer kargo kesintisi tespit edildi.`,
       });
     }
   }
 
+  // İade kargo ama iade yok
   const iadeKargoRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'iade_kargo');
   if (iadeKargoRows.length > 0 && iadeRows.length === 0 && !order.hasIade) {
     const iadeKargoTutari = iadeKargoRows.reduce((sum, row) => sum + Math.abs(row.borc), 0);
