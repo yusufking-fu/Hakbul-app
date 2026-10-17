@@ -78,6 +78,65 @@ function detectIslemTur(tur: string, aciklama: string): string {
   return 'diger';
 }
 
+function extractBarkod(urunAdi: string | null): string | null {
+  if (!urunAdi) return null;
+  const trimmed = urunAdi.trim();
+  const idx = trimmed.indexOf(' / ');
+  if (idx >= 0) {
+    const barkod = trimmed.slice(0, idx).trim();
+    return barkod || null;
+  }
+  return trimmed || null;
+}
+
+function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function getDuplicateCommissionExtra(rows: ExcelRow[]): number {
+  const counts = new Map<number, number>();
+
+  for (const row of rows) {
+    const amount = Math.abs(row.borc);
+    if (amount <= 0.01) continue;
+    const key = roundCurrency(amount);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  let extra = 0;
+  for (const [amount, count] of counts) {
+    if (count >= 2) {
+      extra += amount * (count - 1);
+    }
+  }
+
+  return extra;
+}
+
+function getMostCommonRate(rates: number[]): number | null {
+  if (!rates.length) return null;
+
+  const counts = new Map<number, number>();
+  for (const rate of rates) {
+    if (!Number.isFinite(rate) || rate <= 0) continue;
+    const key = Number(rate.toFixed(6));
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  if (counts.size === 0) return null;
+
+  let bestRate: number | null = null;
+  let bestCount = -1;
+  for (const [rate, count] of counts) {
+    if (count > bestCount || (count === bestCount && bestRate === null)) {
+      bestRate = rate;
+      bestCount = count;
+    }
+  }
+
+  return bestRate;
+}
+
 interface OrderKomisyonInfo {
   siparisNo: string;
   urunAdi: string | null;
@@ -85,6 +144,40 @@ interface OrderKomisyonInfo {
   satisTutari: number;
   komisyonTutari: number;
   oran: number | null;
+}
+
+function getOrderCommissionInfo(order: GroupedOrder): OrderKomisyonInfo | null {
+  const satisRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'satis');
+  const komisyonRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon');
+
+  if (satisRows.length === 0 || komisyonRows.length === 0) return null;
+
+  const satisTutari = satisRows.reduce((sum, row) => sum + Math.abs(row.alacak), 0);
+  const komisyonTutariToplam = komisyonRows.reduce((sum, row) => sum + Math.abs(row.borc), 0);
+  const duplicateExtra = getDuplicateCommissionExtra(komisyonRows);
+  const komisyonTutari = Math.max(0, komisyonTutariToplam - duplicateExtra);
+
+  if (satisTutari <= 0.01 || komisyonTutari <= 0.01) return null;
+
+  return {
+    siparisNo: order.siparisNo,
+    urunAdi: order.urunAdi,
+    barkod: order.barkod,
+    satisTutari,
+    komisyonTutari,
+    oran: komisyonTutari / satisTutari,
+  };
+}
+
+function getReferenceCommissionRate(groupedOrders: GroupedOrder[]): number | null {
+  const infos = groupedOrders
+    .map((order) => getOrderCommissionInfo(order))
+    .filter((info): info is OrderKomisyonInfo => info !== null && info.oran !== null);
+
+  if (infos.length === 0) return null;
+
+  const rates = infos.map((info) => info.oran!).filter((rate) => Number.isFinite(rate) && rate > 0);
+  return getMostCommonRate(rates);
 }
 
 export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
@@ -97,12 +190,16 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     const detTur = detectIslemTur(row.islemTuru, row.aciklama || '');
 
     if (detTur === 'ceza') {
-      cezaRows.push(row);
-      continue;
+      if (!row.siparisNo || !row.siparisNo.trim()) {
+        cezaRows.push(row);
+        continue;
+      }
     }
 
     if (!row.siparisNo || !row.siparisNo.trim()) {
-      noOrderRows.push(row);
+      if (detTur !== 'ceza') {
+        noOrderRows.push(row);
+      }
       continue;
     }
 
@@ -111,7 +208,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
       orderMap.set(key, {
         siparisNo: key,
         urunAdi: row.urunAdi,
-        barkod: row.urunAdi,
+        barkod: extractBarkod(row.urunAdi),
         rows: [],
         toplamBorc: 0,
         toplamAlacak: 0,
@@ -132,6 +229,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     order.netTutar += row.tutar;
 
     if (!order.urunAdi && row.urunAdi) order.urunAdi = row.urunAdi;
+    if (!order.barkod) order.barkod = extractBarkod(row.urunAdi);
 
     if (!order.islemTurleri.includes(detTur)) {
       order.islemTurleri.push(detTur);
@@ -146,11 +244,10 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   const groupedOrders = Array.from(orderMap.values());
   const farklar: FarkSonuc[] = [];
 
-  // Per-order checks
-  const komisyonInfoList: OrderKomisyonInfo[] = [];
+  const referenceRate = getReferenceCommissionRate(groupedOrders);
 
   for (const order of groupedOrders) {
-    const issues = checkOrder(order);
+    const issues = checkOrder(order, referenceRate);
     for (const issue of issues) {
       farklar.push({
         id: `excel-fark-${order.siparisNo}-${issue.type}-${farklar.length}`,
@@ -163,64 +260,8 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
         aciklama: issue.aciklama,
       });
     }
-
-    // Collect commission rate info for cross-order comparison
-    const satisRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'satis');
-    const komisyonRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon');
-    if (satisRows.length > 0 && komisyonRows.length > 0) {
-      const satisTutari = satisRows.reduce((s, r) => s + r.alacak, 0);
-      const komisyonTutari = komisyonRows.reduce((s, r) => s + r.borc, 0);
-      if (satisTutari > 0.01) {
-        komisyonInfoList.push({
-          siparisNo: order.siparisNo,
-          urunAdi: order.urunAdi,
-          barkod: order.barkod,
-          satisTutari,
-          komisyonTutari,
-          oran: komisyonTutari / satisTutari,
-        });
-      }
-    }
   }
 
-  // Cross-order check: same barkod, different commission rates
-  const barkodMap = new Map<string, OrderKomisyonInfo[]>();
-  for (const info of komisyonInfoList) {
-    if (!info.barkod) continue;
-    const key = info.barkod;
-    if (!barkodMap.has(key)) barkodMap.set(key, []);
-    barkodMap.get(key)!.push(info);
-  }
-
-  for (const [barkod, infos] of barkodMap) {
-    if (infos.length < 2) continue;
-    const oranlar = infos.map((i) => i.oran!);
-    const minOran = Math.min(...oranlar);
-    const maxOran = Math.max(...oranlar);
-    if (maxOran - minOran > 0.02) {
-      const beklenenOran = minOran;
-      for (const info of infos) {
-        if (info.oran! > beklenenOran + 0.01) {
-          const beklenenKomisyon = info.satisTutari * beklenenOran;
-          const fazlaKesinti = info.komisyonTutari - beklenenKomisyon;
-          if (fazlaKesinti > 0.5) {
-            farklar.push({
-              id: `excel-fark-${info.siparisNo}-komisyon-oran-${farklar.length}`,
-              siparisNo: info.siparisNo,
-              urunAdi: info.urunAdi,
-              farkTuru: 'komisyon',
-              fark: fazlaKesinti,
-              beklenenTutar: beklenenKomisyon,
-              gercekTutar: info.komisyonTutari,
-              aciklama: `Aynı ürün (${barkod}) için farklı komisyon oranı: %${(info.oran! * 100).toFixed(1)} vs %${(beklenenOran * 100).toFixed(1)}. Fazla kesilen: ${fazlaKesinti.toFixed(2)} TL.`,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // Ceza rows → fark listesi
   for (const row of cezaRows) {
     const tutar = row.borc > 0 ? row.borc : (row.tutar < 0 ? Math.abs(row.tutar) : 0);
     if (tutar > 0.01) {
@@ -238,10 +279,10 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     }
   }
 
-  // No-order rows (non-ceza, non-satis) → fark listesi
   for (const row of noOrderRows) {
     const detTur = detectIslemTur(row.islemTuru, row.aciklama || '');
     if (detTur === 'satis') continue;
+
     const tutar = row.borc > 0 ? row.borc : (row.tutar < 0 ? Math.abs(row.tutar) : 0);
     if (tutar > 0.01) {
       farklar.push({
@@ -257,12 +298,12 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     }
   }
 
-  const cezaSayisi = cezaRows.filter((r) => {
-    const t = r.borc > 0 ? r.borc : (r.tutar < 0 ? Math.abs(r.tutar) : 0);
-    return t > 0.01;
+  const cezaSayisi = cezaRows.filter((row) => {
+    const tutar = row.borc > 0 ? row.borc : (row.tutar < 0 ? Math.abs(row.tutar) : 0);
+    return tutar > 0.01;
   }).length;
 
-  const toplamFark = farklar.reduce((s, f) => s + Math.abs(f.fark), 0);
+  const toplamFark = farklar.reduce((sum, item) => sum + Math.abs(item.fark), 0);
 
   return {
     groupedOrders,
@@ -280,62 +321,62 @@ interface CheckResult {
   aciklama: string;
 }
 
-function checkOrder(order: GroupedOrder): CheckResult[] {
+function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckResult[] {
   const results: CheckResult[] = [];
   const komisyonRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon');
   const komisyonIadeRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon_iadesi');
   const iadeRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'iade');
 
-  // 1) İade edilmiş siparişte komisyon iadesinin eksik olması
+  if (referenceRate !== null) {
+    const orderInfo = getOrderCommissionInfo(order);
+    if (orderInfo && orderInfo.oran !== null) {
+      const diffRate = orderInfo.oran - referenceRate;
+      const fark = diffRate * orderInfo.satisTutari;
+      if (Math.abs(fark) >= 0.01) {
+        results.push({
+          type: 'komisyon',
+          fark: Math.abs(fark),
+          aciklama: `Referans oran (${referenceRate.toFixed(4)}) ile sipariş oranı (${orderInfo.oran.toFixed(4)}) arasındaki fark: ${(diffRate * 100).toFixed(2)}%.`,
+        });
+      }
+    }
+  }
+
+  if (komisyonRows.length >= 2) {
+    const counts = new Map<number, number>();
+    for (const row of komisyonRows) {
+      const amount = roundCurrency(Math.abs(row.borc));
+      counts.set(amount, (counts.get(amount) ?? 0) + 1);
+    }
+
+    for (const [amount, count] of counts) {
+      if (count >= 2 && amount > 0.5) {
+        results.push({
+          type: 'mukerrer',
+          fark: amount * (count - 1),
+          aciklama: `Aynı tutarda (${amount.toFixed(2)} TL) komisyon kesintisi tekrarlandı; ikincisi mükerrer kabul edilir.`,
+        });
+      }
+    }
+  }
+
   if (order.hasIade && !order.hasKomisyonIadesi && order.hasKomisyon) {
-    const komisyonTutari = komisyonRows.reduce((s, r) => s + r.borc, 0);
-    if (komisyonTutari > 0.01) {
+    const iadeTutari = iadeRows.reduce((sum, row) => sum + Math.abs(row.alacak), 0);
+    if (referenceRate !== null && iadeTutari > 0.01) {
+      const fark = iadeTutari * referenceRate;
       results.push({
         type: 'iade',
-        fark: komisyonTutari,
-        aciklama: 'İade satışı var ancak komisyon iadesi yok. Komisyon tutarının iadesi alacak olarak görünmüyor.',
+        fark,
+        aciklama: `İade satışı var ama komisyon iadesi yok. İade tutarı (${iadeTutari.toFixed(2)} TL) × referans oran (${referenceRate.toFixed(4)}) = ${fark.toFixed(2)} TL.`,
       });
     }
   }
 
-  // 2) Mükerrer komisyon kesintisi (aynı tutarda iki komisyon)
-  if (komisyonRows.length >= 2) {
-    const tutarMap = new Map<number, number>();
-    for (const r of komisyonRows) {
-      const key = Math.round(r.borc * 100) / 100;
-      tutarMap.set(key, (tutarMap.get(key) || 0) + 1);
-    }
-    for (const [tutar, count] of tutarMap) {
-      if (count >= 2 && tutar > 0.5) {
-        results.push({
-          type: 'mukerrer',
-          fark: tutar * (count - 1),
-          aciklama: `Siparişte ${count} adet aynı tutarda (${tutar.toFixed(2)} TL) komisyon kesintisi. İkincisi mükerrer olabilir.`,
-        });
-        break;
-      }
-    }
-    // Fallback: if no exact match but total minus max is significant
-    if (results.filter((r) => r.type === 'mukerrer').length === 0) {
-      const komisyonTutarlari = komisyonRows.map((r) => r.borc);
-      const toplamKomisyon = komisyonTutarlari.reduce((s, t) => s + t, 0);
-      const enBuyuk = Math.max(...komisyonTutarlari);
-      if (toplamKomisyon - enBuyuk > 0.5) {
-        results.push({
-          type: 'mukerrer',
-          fark: toplamKomisyon - enBuyuk,
-          aciklama: `${komisyonRows.length} adet komisyon kesintisi bulunuyor. Mükerrer komisyon olabilir.`,
-        });
-      }
-    }
-  }
-
-  // 3) Mükerrer kargo kesintisi
   const kargoRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'kargo');
   if (kargoRows.length > 1) {
-    const kargoTutarlari = kargoRows.map((r) => r.borc);
-    const toplamKargo = kargoTutarlari.reduce((s, t) => s + t, 0);
-    const enBuyuk = Math.max(...kargoTutarlari);
+    const tutarlar = kargoRows.map((r) => Math.abs(r.borc));
+    const toplamKargo = tutarlar.reduce((sum, value) => sum + value, 0);
+    const enBuyuk = Math.max(...tutarlar);
     if (toplamKargo - enBuyuk > 0.5) {
       results.push({
         type: 'mukerrer',
@@ -345,10 +386,9 @@ function checkOrder(order: GroupedOrder): CheckResult[] {
     }
   }
 
-  // 4) İade kargo kesintisi var ama iade bedeli yok
   const iadeKargoRows = order.rows.filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'iade_kargo');
   if (iadeKargoRows.length > 0 && iadeRows.length === 0 && !order.hasIade) {
-    const iadeKargoTutari = iadeKargoRows.reduce((s, r) => s + r.borc, 0);
+    const iadeKargoTutari = iadeKargoRows.reduce((sum, row) => sum + Math.abs(row.borc), 0);
     results.push({
       type: 'iade',
       fark: iadeKargoTutari,
