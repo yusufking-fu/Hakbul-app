@@ -250,9 +250,10 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     const issues = checkOrder(order, referenceRate);
     for (const issue of issues) {
       // Use the order.siparisNo of the order where the issue was detected
+      const ownerSip = (issue as any).siparisNo && String((issue as any).siparisNo).trim() ? (issue as any).siparisNo : order.siparisNo;
       farklar.push({
-        id: `excel-fark-${order.siparisNo}-${issue.type}-${farklar.length}`,
-        siparisNo: order.siparisNo,
+        id: `excel-fark-${ownerSip}-${issue.type}-${farklar.length}`,
+        siparisNo: ownerSip,
         urunAdi: order.urunAdi,
         farkTuru: issue.type,
         fark: issue.fark,
@@ -317,6 +318,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
 }
 
 interface CheckResult {
+  siparisNo: string;
   type: DiffType;
   fark: number;
   aciklama: string;
@@ -336,6 +338,7 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
       const fark = diffRate * orderInfo.satisTutari;
       if (Math.abs(fark) >= 0.01) {
         results.push({
+          siparisNo: order.siparisNo,
           type: 'komisyon',
           fark: Math.abs(fark),
           aciklama: `Order oranı (${orderInfo.oran.toFixed(6)}) ile referans oran (${referenceRate.toFixed(6)}) arasındaki fark.`,
@@ -355,6 +358,7 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
     for (const [amount, count] of counts) {
       if (count >= 2 && amount > 0.5) {
         results.push({
+          siparisNo: order.siparisNo,
           type: 'mukerrer',
           fark: amount * (count - 1),
           aciklama: `Siparişte aynı tutarda ${count} komisyon kesintisi bulundu; fazlalık mükerrer kabul edildi.`,
@@ -364,11 +368,12 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
   }
 
   // Kural: İade satışında komisyon iadesi eksikse, iade tutarı × referans oran kadar fark yaz
-  if (order.hasIade && !order.hasKomisyonIadesi && order.hasKomisyon) {
+  if (order.hasIade && !order.hasKomisyonIadesi) {
     const iadeTutari = iadeRows.reduce((sum, row) => sum + Math.abs(row.alacak), 0);
     if (referenceRate !== null && iadeTutari > 0.01) {
       const fark = iadeTutari * referenceRate;
       results.push({
+        siparisNo: order.siparisNo,
         type: 'iade',
         fark,
         aciklama: `İade satışı var fakat komisyon iadesi yok; iade tutarı × referans oran hesaplandı.`,
@@ -384,6 +389,7 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
     const enBuyuk = Math.max(...tutarlar);
     if (toplamKargo - enBuyuk > 0.5) {
       results.push({
+        siparisNo: order.siparisNo,
         type: 'mukerrer',
         fark: toplamKargo - enBuyuk,
         aciklama: `Mükerrer kargo kesintisi tespit edildi.`,
@@ -396,6 +402,7 @@ function checkOrder(order: GroupedOrder, referenceRate: number | null): CheckRes
   if (iadeKargoRows.length > 0 && iadeRows.length === 0 && !order.hasIade) {
     const iadeKargoTutari = iadeKargoRows.reduce((sum, row) => sum + Math.abs(row.borc), 0);
     results.push({
+      siparisNo: order.siparisNo,
       type: 'iade',
       fark: iadeKargoTutari,
       aciklama: 'İade kargo kesintisi var ancak iade işlemi bulunamadı.',
