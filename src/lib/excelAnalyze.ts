@@ -120,7 +120,7 @@ interface CheckResult {
   aciklama: string;
 }
 
-function checkOrder(order: GroupedOrder, referansOran: number): CheckResult[] {
+function checkOrder(order: GroupedOrder, referansOran: number | null): CheckResult[] {
   const results: CheckResult[] = [];
   const komisyonRows = order.rows.filter(
     (r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon'
@@ -130,7 +130,7 @@ function checkOrder(order: GroupedOrder, referansOran: number): CheckResult[] {
   );
 
   // Kural 3: iade satışı var, komisyon iadesi yok → iade tutarı × referans oran
-  if (order.hasIade && !order.hasKomisyonIadesi) {
+  if (order.hasIade && !order.hasKomisyonIadesi && referansOran !== null) {
     const iadeTutari = iadeRows.reduce((s, r) => s + mutlakTutar(r), 0);
     const fark = iadeTutari * referansOran;
     if (fark >= 0.01) {
@@ -228,36 +228,50 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     oranBilgisi.push({ order, oran: komisyon / satis, satis });
   }
 
-  const oranSayac = new Map<number, number>();
+  // Referans oran: en sık görülen oran. Eşit sıklıkta ise toplam satış tutarı
+  // en büyük olan oran. Hâlâ eşitse (ör. aynı satış tutarı) referans belirsizdir,
+  // komisyon oranı farkı yazılmaz.
+  const oranSayac = new Map<number, { adet: number; satisToplam: number }>();
   for (const b of oranBilgisi) {
     const k = Math.round(b.oran * 10000) / 10000;
-    oranSayac.set(k, (oranSayac.get(k) || 0) + 1);
+    const cur = oranSayac.get(k) || { adet: 0, satisToplam: 0 };
+    cur.adet += 1;
+    cur.satisToplam += b.satis;
+    oranSayac.set(k, cur);
   }
-  let referansOran = 0;
+  let referansOran: number | null = null;
   let enCokAdet = 0;
-  for (const [oran, adet] of [...oranSayac.entries()].sort((a, b) => a[0] - b[0])) {
-    if (adet > enCokAdet) {
+  let enBuyukSatis = 0;
+  for (const [oran, { adet, satisToplam }] of [...oranSayac.entries()].sort(
+    (a, b) => a[0] - b[0]
+  )) {
+    if (adet > enCokAdet || (adet === enCokAdet && satisToplam > enBuyukSatis)) {
       enCokAdet = adet;
+      enBuyukSatis = satisToplam;
       referansOran = oran;
+    } else if (adet === enCokAdet && satisToplam === enBuyukSatis) {
+      referansOran = null;
     }
   }
 
   // Kural 1: sipariş oranı referanstan farklıysa fark yaz
-  for (const b of oranBilgisi) {
-    const k = Math.round(b.oran * 10000) / 10000;
-    if (k === referansOran) continue;
-    const fark = Math.abs((b.oran - referansOran) * b.satis);
-    if (fark < 0.01) continue;
-    farklar.push({
-      id: `excel-fark-${b.order.siparisNo}-komisyon-oran`,
-      siparisNo: b.order.siparisNo,
-      urunAdi: b.order.urunAdi,
-      farkTuru: 'komisyon',
-      fark,
-      beklenenTutar: referansOran * b.satis,
-      gercekTutar: b.oran * b.satis,
-      aciklama: `Komisyon oranı %${(b.oran * 100).toFixed(1)}, referans oran %${(referansOran * 100).toFixed(1)}. Fazla kesinti: ${fark.toFixed(2)} TL.`,
-    });
+  if (referansOran !== null) {
+    for (const b of oranBilgisi) {
+      const k = Math.round(b.oran * 10000) / 10000;
+      if (k === referansOran) continue;
+      const fark = Math.abs((b.oran - referansOran) * b.satis);
+      if (fark < 0.01) continue;
+      farklar.push({
+        id: `excel-fark-${b.order.siparisNo}-komisyon-oran`,
+        siparisNo: b.order.siparisNo,
+        urunAdi: b.order.urunAdi,
+        farkTuru: 'komisyon',
+        fark,
+        beklenenTutar: referansOran * b.satis,
+        gercekTutar: b.oran * b.satis,
+        aciklama: `Komisyon oranı %${(b.oran * 100).toFixed(1)}, referans oran %${(referansOran * 100).toFixed(1)}. Fazla kesinti: ${fark.toFixed(2)} TL.`,
+      });
+    }
   }
 
   // Kural 2 ve 3: sipariş bazlı kontroller
