@@ -105,9 +105,10 @@ export default function UyariMerkeziPage() {
         .from('magazalar')
         .select('id')
         .eq('kullanici_id', user.id)
-        .maybeSingle();
+        .order('olusturma_tarihi', { ascending: false })
+        .limit(1);
 
-      if (!magazalar) {
+      if (!magazalar || magazalar.length === 0) {
         setLoading(false);
         return;
       }
@@ -115,7 +116,7 @@ export default function UyariMerkeziPage() {
       const { data: donemler } = await supabase
         .from('hakedis_donemleri')
         .select('id, tarama_tarihi')
-        .eq('magaza_id', magazalar.id)
+        .eq('magaza_id', magazalar[0].id)
         .order('tarama_tarihi', { ascending: false });
 
       if (!donemler || donemler.length === 0) {

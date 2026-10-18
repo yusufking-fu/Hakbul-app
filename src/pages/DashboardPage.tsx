@@ -83,14 +83,15 @@ export default function DashboardPage() {
         setAbonelikDurumu(kullaniciData.abonelik_durumu);
       }
 
-      // Kullanıcının mağazasını bul
+      // Kullanıcının mağazasını bul (en son eklenen kayıt)
       const { data: magazalar } = await supabase
         .from('magazalar')
         .select('id')
         .eq('kullanici_id', user.id)
-        .maybeSingle();
+        .order('olusturma_tarihi', { ascending: false })
+        .limit(1);
 
-      if (!magazalar) {
+      if (!magazalar || magazalar.length === 0) {
         setHasStore(false);
         setLoading(false);
         return;
@@ -100,7 +101,7 @@ export default function DashboardPage() {
       const { data: donemData } = await supabase
         .from('hakedis_donemleri')
         .select('*')
-        .eq('magaza_id', magazalar.id)
+        .eq('magaza_id', magazalar[0].id)
         .order('tarama_tarihi', { ascending: false })
         .limit(1)
         .maybeSingle();

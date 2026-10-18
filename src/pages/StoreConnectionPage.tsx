@@ -32,39 +32,81 @@ export default function StoreConnectionPage() {
     setLoading(true);
     setStatusText('Mağaza kaydediliyor…');
 
-    // 1. Mağaza kaydı oluştur
-    const { data: magazaData, error: insertError } = await supabase
+    // 1. Mevcut mağaza kaydını kontrol et, yoksa oluştur
+    const { data: existingMagaza } = await supabase
       .from('magazalar')
-      .insert({
-        kullanici_id: user?.id,
-        platform: 'trendyol',
-        supplier_id: supplierId,
-        api_key: apiKey,
-        api_secret: apiSecret,
-        sirket_turu: sirketTuru,
-        baglanti_durumu: 'bekliyor',
-      })
-      .select()
-      .single();
+      .select('id')
+      .eq('kullanici_id', user?.id)
+      .order('olusturma_tarihi', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (insertError || !magazaData) {
+    let magazaData: { id: string } | null = null;
+
+    if (existingMagaza) {
+      const { data: updated, error: updateError } = await supabase
+        .from('magazalar')
+        .update({
+          platform: 'trendyol',
+          supplier_id: supplierId,
+          api_key: apiKey,
+          api_secret: apiSecret,
+          sirket_turu: sirketTuru,
+          baglanti_durumu: 'bekliyor',
+        })
+        .eq('id', existingMagaza.id)
+        .select()
+        .single();
+
+      if (updateError || !updated) {
+        setLoading(false);
+        setError('Bağlantı kaydedilemedi. Lütfen tekrar dene.');
+        return;
+      }
+      magazaData = updated;
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from('magazalar')
+        .insert({
+          kullanici_id: user?.id,
+          platform: 'trendyol',
+          supplier_id: supplierId,
+          api_key: apiKey,
+          api_secret: apiSecret,
+          sirket_turu: sirketTuru,
+          baglanti_durumu: 'bekliyor',
+        })
+        .select()
+        .single();
+
+      if (insertError || !inserted) {
+        setLoading(false);
+        setError('Bağlantı kaydedilemedi. Lütfen tekrar dene.');
+        return;
+      }
+      magazaData = inserted;
+    }
+
+    if (!magazaData) {
       setLoading(false);
       setError('Bağlantı kaydedilemedi. Lütfen tekrar dene.');
       return;
     }
+
+    const magazaId = magazaData.id;
 
     // 2. Gerçek Trendyol API'sinden sipariş çekmeyi dene
     setStatusText('Trendyol API\'sine bağlanılıyor…');
     let syncSuccess = false;
 
     try {
-      const syncResult = await syncTrendyolOrders(magazaData.id);
+      const syncResult = await syncTrendyolOrders(magazaId);
       if (syncResult.success) {
         syncSuccess = true;
         setStatusText(`${syncResult.ordersCount} sipariş çekildi. Hakediş hesaplanıyor…`);
 
         // Finans endpoint'lerini arka planda test et (sonuçları konsola yaz)
-        testFinanceEndpoints(magazaData.id).then((financeResult) => {
+        testFinanceEndpoints(magazaId).then((financeResult) => {
           if (financeResult.success && financeResult.results) {
             console.log('=== Trendyol Finans Endpoint Test Sonuçları ===');
             if (financeResult.results.settlements) {
@@ -79,15 +121,15 @@ export default function StoreConnectionPage() {
 
         // Hakediş dönemi ve fark kalemleri oluştur (hesaplama motorunu çalıştır)
         // Gerçek çekilen siparişler üzerinden hesaplama yap
-        await generateMockOrders(magazaData.id, sirketTuru);
+        await generateMockOrders(magazaId, sirketTuru);
       } else {
         // API başarısız — mock veriye geri dön
         setStatusText('API bağlantısı başarısız, örnek veriyle devam ediliyor…');
         await supabase
           .from('magazalar')
           .update({ baglanti_durumu: 'mock' })
-          .eq('id', magazaData.id);
-        await generateMockOrders(magazaData.id, sirketTuru);
+          .eq('id', magazaId);
+        await generateMockOrders(magazaId, sirketTuru);
         setUsedMock(true);
       }
     } catch {
@@ -96,8 +138,8 @@ export default function StoreConnectionPage() {
       await supabase
         .from('magazalar')
         .update({ baglanti_durumu: 'mock' })
-        .eq('id', magazaData.id);
-      await generateMockOrders(magazaData.id, sirketTuru);
+        .eq('id', magazaId);
+      await generateMockOrders(magazaId, sirketTuru);
       setUsedMock(true);
     }
 

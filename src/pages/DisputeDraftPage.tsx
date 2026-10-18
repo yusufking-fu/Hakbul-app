@@ -139,20 +139,22 @@ export default function DisputeDraftPage() {
       if (!user?.id) return;
 
       try {
-        // Kullanıcının mağazasını bul
-        const { data: magaza, error: magazaError } = await supabase
+        // Kullanıcının mağazasını bul (en son eklenen kayıt)
+        const { data: magazaRows, error: magazaError } = await supabase
           .from('magazalar')
           .select('id')
           .eq('kullanici_id', user.id)
-          .maybeSingle();
+          .order('olusturma_tarihi', { ascending: false })
+          .limit(1);
 
         if (magazaError) throw magazaError;
-        if (!magaza) {
+        if (!magazaRows || magazaRows.length === 0) {
           setError('Henüz mağaza bağlı değil. Önce bir mağaza bağlayın.');
           setLoading(false);
           return;
         }
 
+        const magaza = magazaRows[0];
         setMagazaId(magaza.id);
 
         // En son hakediş dönemini getir
