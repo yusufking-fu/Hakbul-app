@@ -65,6 +65,7 @@ const K_CEZA = ['ceza', 'cezakesintisi', 'operasyonel', 'mudahale', 'iptalceza',
 const K_DIGER = ['diger', 'other'];
 
 function detectIslemTur(tur: string, aciklama: string): string {
+  if (islemTurMatch(tur, K_CEZA)) return 'ceza';
   const combined = `${tur} ${aciklama}`;
   if (islemTurMatch(combined, K_KOMISYON_IADE)) return 'komisyon_iadesi';
   if (islemTurMatch(combined, K_KOMISYON)) return 'komisyon';
