@@ -79,7 +79,24 @@ function detectIslemTur(tur: string, aciklama: string): string {
 }
 
 function mutlakTutar(r: ExcelRow): number {
-  return r.borc > 0 ? r.borc : Math.abs(r.tutar);
+  return Math.abs(r.tutar);
+}
+
+// "Barkod / Ürün Adı" -> barkod, ürün adı ayrımı.
+function extractBarkod(urunAdi: string | null): string | null {
+  if (!urunAdi) return null;
+  const idx = urunAdi.indexOf(' / ');
+  if (idx < 0) return null;
+  const b = urunAdi.slice(0, idx).trim();
+  return b || null;
+}
+
+function extractUrunAdi(urunAdi: string | null): string | null {
+  if (!urunAdi) return null;
+  const idx = urunAdi.indexOf(' / ');
+  if (idx < 0) return urunAdi;
+  const u = urunAdi.slice(idx + 3).trim();
+  return u || null;
 }
 
 // Aynı tutarlı tekrar eden komisyon satırları oran hesabına girmez.
@@ -168,8 +185,8 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     if (!orderMap.has(key)) {
       orderMap.set(key, {
         siparisNo: key,
-        urunAdi: row.urunAdi,
-        barkod: row.urunAdi,
+        urunAdi: extractUrunAdi(row.urunAdi),
+        barkod: extractBarkod(row.urunAdi),
         rows: [],
         toplamBorc: 0,
         toplamAlacak: 0,
@@ -188,9 +205,10 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     order.toplamBorc += row.borc;
     order.toplamAlacak += row.alacak;
     order.netTutar += row.tutar;
-    if (!order.urunAdi && row.urunAdi) order.urunAdi = row.urunAdi;
+    if (!order.urunAdi) order.urunAdi = extractUrunAdi(row.urunAdi);
+    if (!order.barkod) order.barkod = extractBarkod(row.urunAdi);
     if (!order.islemTurleri.includes(detTur)) order.islemTurleri.push(detTur);
-    if (detTur === 'iade' || detTur === 'iade_kargo') order.hasIade = true;
+    if (detTur === 'iade') order.hasIade = true;
     if (detTur === 'komisyon') order.hasKomisyon = true;
     if (detTur === 'komisyon_iadesi') order.hasKomisyonIadesi = true;
     if (detTur === 'kargo') order.hasKargo = true;
@@ -204,7 +222,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   for (const order of groupedOrders) {
     const satis = order.rows
       .filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'satis')
-      .reduce((s, r) => s + r.alacak, 0);
+      .reduce((s, r) => s + mutlakTutar(r), 0);
     if (satis <= 0.01) continue;
     const komisyon = uniqueKomisyonTutarlari(order).reduce((s, t) => s + t, 0);
     oranBilgisi.push({ order, oran: komisyon / satis, satis });
@@ -217,7 +235,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   }
   let referansOran = 0;
   let enCokAdet = 0;
-  for (const [oran, adet] of oranSayac) {
+  for (const [oran, adet] of [...oranSayac.entries()].sort((a, b) => a[0] - b[0])) {
     if (adet > enCokAdet) {
       enCokAdet = adet;
       referansOran = oran;
@@ -306,7 +324,4 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     cezaSayisi,
     cezaToplami,
   };
-      }
-: 
-        
-    
+}
