@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, AlertTriangle, FileSpreadsheet } from 'lucide-react';
-import { Bolt Database } from '@/lib/supabase';
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, FileSpreadsheet } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { generateMockOrders } from '@/lib/generateMockOrders';
 import { syncTrendyolOrders, testFinanceEndpoints } from '@/lib/trendyolApi';
 import type { SirketTuru } from '@/lib/hakedisHesapla';
 
@@ -18,7 +17,6 @@ export default function StoreConnectionPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [statusText, setStatusText] = useState('');
-  const [usedMock, setUsedMock] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +31,7 @@ export default function StoreConnectionPage() {
     setStatusText('Mağaza kaydediliyor…');
 
     // 1. Mevcut mağaza kaydını kontrol et, yoksa oluştur
-    const { data: existingMagaza } = await Bolt Database
+    const { data: existingMagaza } = await supabase
       .from('magazalar')
       .select('id')
       .eq('kullanici_id', user?.id)
@@ -44,7 +42,7 @@ export default function StoreConnectionPage() {
     let magazaData: { id: string } | null = null;
 
     if (existingMagaza) {
-      const { data: updated, error: updateError } = await Bolt Database
+      const { data: updated, error: updateError } = await supabase
         .from('magazalar')
         .update({
           platform: 'trendyol',
@@ -65,7 +63,7 @@ export default function StoreConnectionPage() {
       }
       magazaData = updated;
     } else {
-      const { data: inserted, error: insertError } = await Bolt Database
+      const { data: inserted, error: insertError } = await supabase
         .from('magazalar')
         .insert({
           kullanici_id: user?.id,
@@ -97,13 +95,11 @@ export default function StoreConnectionPage() {
 
     // 2. Gerçek Trendyol API'sinden sipariş çekmeyi dene
     setStatusText('Trendyol API\'sine bağlanılıyor…');
-    let syncSuccess = false;
 
     try {
       const syncResult = await syncTrendyolOrders(magazaId);
       if (syncResult.success) {
-        syncSuccess = true;
-        setStatusText(`${syncResult.ordersCount} sipariş çekildi. Hakediş hesaplanıyor…`);
+        setStatusText(`${syncResult.ordersCount} sipariş çekildi.`);
 
         // Finans endpoint'lerini arka planda test et (sonuçları konsola yaz)
         testFinanceEndpoints(magazaId).then((financeResult) => {
@@ -118,29 +114,15 @@ export default function StoreConnectionPage() {
             console.log('=== Test Sonu ===');
           }
         });
-
-        // Hakediş dönemi ve fark kalemleri oluştur (hesaplama motorunu çalıştır)
-        // Gerçek çekilen siparişler üzerinden hesaplama yap
-        await generateMockOrders(magazaId, sirketTuru);
       } else {
-        // API başarısız — mock veriye geri dön
-        setStatusText('API bağlantısı başarısız, örnek veriyle devam ediliyor…');
-        await Bolt Database
-          .from('magazalar')
-          .update({ baglanti_durumu: 'mock' })
-          .eq('id', magazaId);
-        await generateMockOrders(magazaId, sirketTuru);
-        setUsedMock(true);
+        setLoading(false);
+        setError(syncResult.error || 'Trendyol API bağlantısı başarısız. Bilgileri kontrol edip tekrar dene.');
+        return;
       }
     } catch {
-      // Beklenmeyen hata — mock veriye geri dön
-      setStatusText('API bağlantısı başarısız, örnek veriyle devam ediliyor…');
-      await Bolt Database
-        .from('magazalar')
-        .update({ baglanti_durumu: 'mock' })
-        .eq('id', magazaId);
-      await generateMockOrders(magazaId, sirketTuru);
-      setUsedMock(true);
+      setLoading(false);
+      setError('Trendyol API bağlantısı başarısız. Bilgileri kontrol edip tekrar dene.');
+      return;
     }
 
     setLoading(false);
@@ -185,15 +167,6 @@ export default function StoreConnectionPage() {
               </div>
               <h2 className="font-serif text-xl font-semibold text-hb-text">Bağlantı başarılı</h2>
               <p className="mt-2 text-sm text-hb-muted">{statusText}</p>
-              {usedMock && (
-                <div className="mt-4 flex items-start gap-2 rounded-lg border border-hb-secondary/30 bg-hb-secondary/10 px-3 py-2.5 text-xs text-hb-secondary">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                  <span>
-                    Trendyol API'sine bağlanılamadı, örnek veriyle devam ediliyor. Gerçek API
-                    entegrasyonu için Trendyol Satıcı Paneli'nden API erişimini doğrula.
-                  </span>
-                </div>
-              )}
               <Loader2 size={18} className="mt-4 animate-spin text-hb-primary" />
             </div>
           ) : (
@@ -313,5 +286,4 @@ export default function StoreConnectionPage() {
       </div>
     </div>
   );
-          }
-        
+}

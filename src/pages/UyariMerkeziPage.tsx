@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2, Eye } from 'lucide-react';
-import { Bolt Database } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
@@ -101,7 +101,7 @@ export default function UyariMerkeziPage() {
 
       if (!user?.id) return;
 
-      const { data: magazalar } = await Bolt Database
+      const { data: magazalar } = await supabase
         .from('magazalar')
         .select('id')
         .eq('kullanici_id', user.id)
@@ -113,7 +113,7 @@ export default function UyariMerkeziPage() {
         return;
       }
 
-      const { data: donemler } = await Bolt Database
+      const { data: donemler } = await supabase
         .from('hakedis_donemleri')
         .select('id, tarama_tarihi')
         .eq('magaza_id', magazalar[0].id)
@@ -129,7 +129,7 @@ export default function UyariMerkeziPage() {
         donemMap[d.id] = d;
       });
 
-      const { data: farkKalemleri } = await Bolt Database
+      const { data: farkKalemleri } = await supabase
         .from('fark_kalemleri')
         .select('*')
         .in('donem_id', donemler.map((d) => d.id));
@@ -139,7 +139,7 @@ export default function UyariMerkeziPage() {
         return;
       }
 
-      const { data: itirazlar } = await Bolt Database
+      const { data: itirazlar } = await supabase
         .from('itirazlar')
         .select('fark_kalem_id')
         .in('fark_kalem_id', farkKalemleri.map((f) => f.id));
@@ -158,7 +158,7 @@ export default function UyariMerkeziPage() {
       }
 
       const siparisIds = itirazEdilmemisKalemler.map((f) => f.siparis_id);
-      const { data: siparisler } = await Bolt Database
+      const { data: siparisler } = await supabase
         .from('siparisler')
         .select('id, siparis_no, urun_adi, kategori')
         .in('id', siparisIds);
