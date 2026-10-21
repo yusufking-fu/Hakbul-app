@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, FileSpreadsheet } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Bolt Database } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { syncTrendyolOrders, testFinanceEndpoints } from '@/lib/trendyolApi';
 import type { SirketTuru } from '@/lib/hakedisHesapla';
@@ -31,7 +31,7 @@ export default function StoreConnectionPage() {
     setStatusText('Mağaza kaydediliyor…');
 
     // 1. Mevcut mağaza kaydını kontrol et, yoksa oluştur
-    const { data: existingMagaza } = await supabase
+    const { data: existingMagaza } = await Bolt Database
       .from('magazalar')
       .select('id')
       .eq('kullanici_id', user?.id)
@@ -42,7 +42,7 @@ export default function StoreConnectionPage() {
     let magazaData: { id: string } | null = null;
 
     if (existingMagaza) {
-      const { data: updated, error: updateError } = await supabase
+      const { data: updated, error: updateError } = await Bolt Database
         .from('magazalar')
         .update({
           platform: 'trendyol',
@@ -63,7 +63,7 @@ export default function StoreConnectionPage() {
       }
       magazaData = updated;
     } else {
-      const { data: inserted, error: insertError } = await supabase
+      const { data: inserted, error: insertError } = await Bolt Database
         .from('magazalar')
         .insert({
           kullanici_id: user?.id,
@@ -286,4 +286,5 @@ export default function StoreConnectionPage() {
       </div>
     </div>
   );
-}
+      }
+        
