@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { Bolt Database } from '@/lib/supabase';
 import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
 import { CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Loader2, Store, ArrowRight, Lock, Eye } from 'lucide-react';
@@ -73,7 +73,7 @@ export default function DashboardPage() {
       if (!user?.id) return;
 
       // Kullanıcının abonelik durumunu kontrol et
-      const { data: kullaniciData } = await supabase
+      const { data: kullaniciData } = await Bolt Database
         .from('kullanicilar')
         .select('abonelik_durumu')
         .eq('id', user.id)
@@ -84,7 +84,7 @@ export default function DashboardPage() {
       }
 
       // Kullanıcının mağazasını bul (en son eklenen kayıt)
-      const { data: magazalar } = await supabase
+      const { data: magazalar } = await Bolt Database
         .from('magazalar')
         .select('id')
         .eq('kullanici_id', user.id)
@@ -98,7 +98,7 @@ export default function DashboardPage() {
       }
 
       // En son hakediş dönemini getir
-      const { data: donemData } = await supabase
+      const { data: donemData } = await Bolt Database
         .from('hakedis_donemleri')
         .select('*')
         .eq('magaza_id', magazalar[0].id)
@@ -114,7 +114,7 @@ export default function DashboardPage() {
       setDonem(donemData);
 
       // Fark kalemlerini getir
-      const { data: farkData } = await supabase
+      const { data: farkData } = await Bolt Database
         .from('fark_kalemleri')
         .select('*')
         .eq('donem_id', donemData.id);
@@ -125,7 +125,7 @@ export default function DashboardPage() {
         // İlgili siparişleri getir
         const siparisIds = farkData.map((f) => f.siparis_id);
         if (siparisIds.length > 0) {
-          const { data: siparisData } = await supabase
+          const { data: siparisData } = await Bolt Database
             .from('siparisler')
             .select('*')
             .in('id', siparisIds);
@@ -399,5 +399,5 @@ function DashboardHeader({ email, onSignOut, isDemo }: { email?: string; onSignO
       </div>
     </header>
   );
-                }
-                    
+                                                               }
+            
