@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
-import { Bolt Database } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
 import { CheckCircle2, AlertTriangle, LogOut, FileSpreadsheet, Loader2, Store, ArrowRight, Lock, Eye } from 'lucide-react';
@@ -73,7 +73,7 @@ export default function DashboardPage() {
       if (!user?.id) return;
 
       // Kullanıcının abonelik durumunu kontrol et
-      const { data: kullaniciData } = await Bolt Database
+      const { data: kullaniciData } = await supabase
         .from('kullanicilar')
         .select('abonelik_durumu')
         .eq('id', user.id)
@@ -84,7 +84,7 @@ export default function DashboardPage() {
       }
 
       // Kullanıcının mağazasını bul (en son eklenen kayıt)
-      const { data: magazalar } = await Bolt Database
+      const { data: magazalar } = await supabase
         .from('magazalar')
         .select('id')
         .eq('kullanici_id', user.id)
@@ -98,7 +98,7 @@ export default function DashboardPage() {
       }
 
       // En son hakediş dönemini getir
-      const { data: donemData } = await Bolt Database
+      const { data: donemData } = await supabase
         .from('hakedis_donemleri')
         .select('*')
         .eq('magaza_id', magazalar[0].id)
@@ -114,7 +114,7 @@ export default function DashboardPage() {
       setDonem(donemData);
 
       // Fark kalemlerini getir
-      const { data: farkData } = await Bolt Database
+      const { data: farkData } = await supabase
         .from('fark_kalemleri')
         .select('*')
         .eq('donem_id', donemData.id);
@@ -125,7 +125,7 @@ export default function DashboardPage() {
         // İlgili siparişleri getir
         const siparisIds = farkData.map((f) => f.siparis_id);
         if (siparisIds.length > 0) {
-          const { data: siparisData } = await Bolt Database
+          const { data: siparisData } = await supabase
             .from('siparisler')
             .select('*')
             .in('id', siparisIds);
@@ -348,7 +348,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 to="/uyari-merkezi"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-colors hover:bg-hb-secondary/15"
               >
                 <AlertTriangle size={16} />
                 Uyarı Merkezi
@@ -399,5 +399,4 @@ function DashboardHeader({ email, onSignOut, isDemo }: { email?: string; onSignO
       </div>
     </header>
   );
-                                                               }
-            
+}
