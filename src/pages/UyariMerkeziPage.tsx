@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2, Eye } from 'lucide-react';
-import { Bolt Database } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
 import { formatTL } from '@/lib/format';
