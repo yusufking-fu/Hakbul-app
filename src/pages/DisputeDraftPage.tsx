@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CircleAlert as AlertCircle, ArrowLeft, CircleCheck as CheckCircle2, Download, Info, Loader as Loader2, FileText, Clock, Eye } from 'lucide-react';
-import { Bolt Database } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
 import { diffTypeLabels, DiffType } from '@/types/dispute';
@@ -140,7 +140,7 @@ export default function DisputeDraftPage() {
 
       try {
         // Kullanıcının mağazasını bul (en son eklenen kayıt)
-        const { data: magazaRows, error: magazaError } = await Bolt Database
+        const { data: magazaRows, error: magazaError } = await supabase
           .from('magazalar')
           .select('id')
           .eq('kullanici_id', user.id)
@@ -158,7 +158,7 @@ export default function DisputeDraftPage() {
         setMagazaId(magaza.id);
 
         // En son hakediş dönemini getir
-        const { data: donem, error: donemError } = await Bolt Database
+        const { data: donem, error: donemError } = await supabase
           .from('hakedis_donemleri')
           .select('id')
           .eq('magaza_id', magaza.id)
@@ -173,7 +173,7 @@ export default function DisputeDraftPage() {
         }
 
         // Fark kalemlerini getir (sadece tutarsızlık olanlar)
-        const { data: farkKalemleri, error: farkError } = await Bolt Database
+        const { data: farkKalemleri, error: farkError } = await supabase
           .from('fark_kalemleri')
           .select('*')
           .eq('donem_id', donem.id);
@@ -187,7 +187,7 @@ export default function DisputeDraftPage() {
 
         // İlgili siparişleri getir
         const siparisIds = farkKalemleri.map((f) => f.siparis_id);
-        const { data: siparisler, error: siparisError } = await Bolt Database
+        const { data: siparisler, error: siparisError } = await supabase
           .from('siparisler')
           .select('id, siparis_no, urun_adi, kategori')
           .in('id', siparisIds);
@@ -200,7 +200,7 @@ export default function DisputeDraftPage() {
         });
 
         // Mevcut itirazları getir (bu mağaza için)
-        const { data: mevcutItirazlar, error: itirazError } = await Bolt Database
+        const { data: mevcutItirazlar, error: itirazError } = await supabase
           .from('itirazlar')
           .select('id, fark_kalem_id, durum, toplam_tutar, olusturma_tarihi, aciklama')
           .eq('magaza_id', magaza.id)
@@ -215,10 +215,9 @@ export default function DisputeDraftPage() {
           itirazEdilmisKalemIds.add(itiraz.fark_kalem_id);
         });
 
-        // Geçmiş itirazlar için fark kalemi ve sipariş bilgilerini eşleştir
         if (mevcutItirazlar && mevcutItirazlar.length > 0) {
           const itirazKalemIds = mevcutItirazlar.map((i) => i.fark_kalem_id);
-          const { data: itirazKalemleri } = await Bolt Database
+          const { data: itirazKalemleri } = await supabase
             .from('fark_kalemleri')
             .select('id, siparis_id')
             .in('id', itirazKalemIds);
@@ -231,7 +230,7 @@ export default function DisputeDraftPage() {
           const itirazSiparisIds = Object.values(kalemToSiparis);
           let itirazSiparisMap: Record<string, Siparis> = {};
           if (itirazSiparisIds.length > 0) {
-            const { data: itirazSiparisler } = await Bolt Database
+            const { data: itirazSiparisler } = await supabase
               .from('siparisler')
               .select('id, siparis_no, urun_adi, kategori')
               .in('id', itirazSiparisIds);
@@ -254,7 +253,6 @@ export default function DisputeDraftPage() {
           });
         }
 
-        // Sadece tutarsızlık olan (fark >= 0.01) ve henüz itiraz edilmemiş kalemleri listele
         const disputeRows: DisputeOrderRow[] = farkKalemleri
           .filter((f) => Math.abs(Number(f.fark)) >= 0.01)
           .map((f: FarkKalemi) => {
@@ -390,7 +388,7 @@ export default function DisputeDraftPage() {
       setOrders((prev) => prev.filter((o) => !selectedIds.has(o.id)));
       setSelectedIds(new Set());
 
-      const { data: guncelItirazlar } = await Bolt Database
+      const { data: guncelItirazlar } = await supabase
         .from('itirazlar')
         .select('id, fark_kalem_id, durum, toplam_tutar, olusturma_tarihi, aciklama')
         .eq('magaza_id', magazaId)
@@ -398,7 +396,7 @@ export default function DisputeDraftPage() {
 
       if (guncelItirazlar && guncelItirazlar.length > 0) {
         const itirazKalemIds = guncelItirazlar.map((i: Itiraz) => i.fark_kalem_id);
-        const { data: itirazKalemleri } = await Bolt Database
+        const { data: itirazKalemleri } = await supabase
           .from('fark_kalemleri')
           .select('id, siparis_id')
           .in('id', itirazKalemIds);
@@ -411,7 +409,7 @@ export default function DisputeDraftPage() {
         const itirazSiparisIds = Object.values(kalemToSiparis);
         let itirazSiparisMap: Record<string, Siparis> = {};
         if (itirazSiparisIds.length > 0) {
-          const { data: itirazSiparisler } = await Bolt Database
+          const { data: itirazSiparisler } = await supabase
             .from('siparisler')
             .select('id, siparis_no, urun_adi, kategori')
             .in('id', itirazSiparisIds);
@@ -492,7 +490,6 @@ export default function DisputeDraftPage() {
           </div>
         )}
 
-        {/* İtiraz edilebilir kalemler */}
         {orders.length > 0 ? (
           <>
             <p className="text-sm leading-relaxed text-hb-muted">
@@ -549,4 +546,114 @@ export default function DisputeDraftPage() {
             <div className="mt-4 flex items-center gap-2 text-xs text-hb-muted">
               <span className="rounded-md border border-hb-border px-2 py-1 font-medium">Çıktı formatı</span>
               <span>Excel (.xlsx) — cari hesap ekstresi formatında</span>
-            <
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={selectedOrders.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-border bg-hb-surface px-5 py-2.5 text-sm font-semibold text-hb-text transition-colors hover:border-hb-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download size={16} />
+                Excel indir
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCreateItiraz}
+                disabled={selectedOrders.length === 0 || submitting}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    İtiraz oluşturuluyor...
+                  </>
+                ) : (
+                  <>
+                    <FileText size={16} />
+                    İtiraz oluştur
+                  </>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-xl border border-hb-border bg-hb-surface p-8 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-hb-primary/10 text-hb-primary">
+              <Info size={22} />
+            </div>
+            <h2 className="font-serif text-lg font-semibold text-hb-text">İtiraz edilecek fark bulunamadı</h2>
+            <p className="mt-2 text-sm leading-relaxed text-hb-muted">
+              Tutar farkı olan ve henüz itiraz edilmemiş sipariş bulunmuyor.
+            </p>
+          </div>
+        )}
+
+        {pastItirazlar.length > 0 && (
+          <div className="mt-8 rounded-xl border border-hb-border bg-hb-surface overflow-hidden">
+            <div className="border-b border-hb-border px-5 py-3.5">
+              <h2 className="font-serif text-base font-semibold text-hb-text">Geçmiş itirazlar</h2>
+            </div>
+            <div className="divide-y divide-hb-border">
+              {pastItirazlar.map((itiraz) => (
+                <div key={itiraz.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-hb-text">{itiraz.productName}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs tabular-nums text-hb-muted">#{itiraz.orderNumber}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${itirazDurumStilleri[itiraz.durum] ?? itirazDurumStilleri.reddedildi}`}>
+                          {itirazDurumEtiketleri[itiraz.durum] ?? itiraz.durum}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-sm font-semibold tabular-nums text-hb-secondary">{formatTL(itiraz.toplam_tutar)}</p>
+                      <p className="mt-1 text-[11px] text-hb-muted">{formatDate(itiraz.olusturma_tarihi)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function DisputeHeader({ isDemo }: { isDemo?: boolean }) {
+  return (
+    <header className="border-b border-hb-border px-5 py-4 sm:px-8">
+      <div className="mx-auto flex max-w-3xl items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/dashboard"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-hb-border text-hb-text transition-colors hover:border-hb-muted"
+            aria-label="Geri dön"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-hb-primary font-serif text-lg font-semibold text-hb-bg">
+              H
+            </span>
+            <span className="font-serif text-lg font-semibold text-hb-text">HakBul</span>
+            {isDemo && (
+              <span className="flex items-center gap-1 rounded-full border border-hb-secondary/30 bg-hb-secondary/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-hb-secondary">
+                <Eye size={10} />
+                Demo - örnek veri
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-hb-muted">
+          <Clock size={16} className="text-hb-primary" />
+          <span>İtiraz taslağı</span>
+        </div>
+      </div>
+    </header>
+  );
+}
