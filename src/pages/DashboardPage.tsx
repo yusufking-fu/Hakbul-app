@@ -72,15 +72,32 @@ export default function DashboardPage() {
 
       if (!user?.id) return;
 
-      // Kullanıcının abonelik durumunu kontrol et
-      const { data: kullaniciData } = await supabase
-        .from('kullanicilar')
-        .select('abonelik_durumu')
-        .eq('id', user.id)
+      // Kullanıcının en son abonelik kaydını kontrol et; kayıt varsa durum + bitiş tarihine bak.
+      const { data: sonAbonelik } = await supabase
+        .from('abonelikler')
+        .select('durum, bitis_tarihi')
+        .eq('kullanici_id', user.id)
+        .order('olusturma_tarihi', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (kullaniciData) {
-        setAbonelikDurumu(kullaniciData.abonelik_durumu);
+      if (sonAbonelik) {
+        const abonelikAktif =
+          sonAbonelik.durum === 'aktif' &&
+          !!sonAbonelik.bitis_tarihi &&
+          new Date(sonAbonelik.bitis_tarihi).getTime() > Date.now();
+
+        setAbonelikDurumu(abonelikAktif ? 'aktif' : 'pasif');
+      } else {
+        const { data: kullaniciData } = await supabase
+          .from('kullanicilar')
+          .select('abonelik_durumu')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (kullaniciData) {
+          setAbonelikDurumu(kullaniciData.abonelik_durumu);
+        }
       }
 
       // Kullanıcının mağazasını bul (en son eklenen kayıt)
@@ -186,7 +203,7 @@ export default function DashboardPage() {
             </p>
             <Link
               to="/magaza-baglantisi"
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
             >
               Mağaza bağla <ArrowRight size={16} />
             </Link>
@@ -256,7 +273,7 @@ export default function DashboardPage() {
                 </p>
                 <Link
                   to="/abonelik"
-                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
                 >
                   ₺500/ay ile abone ol <ArrowRight size={16} />
                 </Link>
@@ -348,14 +365,14 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 to="/uyari-merkezi"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-colors hover:bg-hb-secondary/15"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-colors hover:bg-hb-secondary/20"
               >
                 <AlertTriangle size={16} />
                 Uyarı Merkezi
               </Link>
               <Link
                 to="/itiraz-taslagi"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
               >
                 <FileSpreadsheet size={16} />
                 İtiraz taslağı oluştur
