@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function Hero() {
   return (
@@ -31,6 +31,11 @@ export default function Hero() {
           Ücretsiz Tara
           <ArrowRight size={18} />
         </Link>
+
+        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-hb-border bg-hb-surface/80 px-3 py-1.5 text-xs text-hb-muted shadow-sm">
+          <ShieldCheck size={14} className="text-hb-primary" />
+          <span>20+ mağaza analiz edildi, 55.000₺+ eksik fark bulundu</span>
+        </div>
       </div>
     </section>
   );
