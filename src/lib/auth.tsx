@@ -47,14 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-
-    return (
+      return (
     <AuthContext.Provider
       value={{ user: session?.user ?? null, session, loading, signOut }}
     >
@@ -63,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-
 export function useAuth() {
   return useContext(AuthContext);
 }
+    
