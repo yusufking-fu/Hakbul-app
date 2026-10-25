@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  return (
+    return (
     <AuthContext.Provider
       value={{ user: session?.user ?? null, session, loading, signOut }}
     >
@@ -62,10 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-  );
-}
-  );
-}
+
 
 export function useAuth() {
   return useContext(AuthContext);
