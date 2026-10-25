@@ -237,15 +237,24 @@ export default function ExcelUploadPage() {
         }
       }
 
-              setStep('done');
-      setTimeout(() => navigate('/dashboard'), 1200);
-    } catch (err) {
-      setSaveError(`Beklenmeyen bir hata oluştu: ${(err as Error).message || 'Bilinmeyen hata'}`);
-      setStep('parsed');
-    }
-  };
+                const periodLabel = new Date().toLocaleDateString('tr-TR', {
+    month: 'long',
+    year: 'numeric',
+  });
 
-  const periodLabel = new Date().toLocaleDateString('tr-TR', {
+  const uniqueOrderCount = new Set(
+    (analiz?.farklar ?? []).filter((f) => f.siparisNo && f.siparisNo !== '—').map((f) => f.siparisNo)
+  ).size;
+
+  const resultCardTitle = parseError
+    ? 'Dosya tamamlanamadı'
+    : 'Kontrol tamamlandı';
+
+  const resultCardMessage = parseError
+    ? "Trendyol'dan Cari Hesap Ekstresi'ni yeniden indirip tekrar yükleyin."
+    : analiz && analiz.farklar.length > 0
+      ? `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde ${uniqueOrderCount || analiz.farklar.length} siparişte toplam ₺${formatTL(analiz.toplamFark)} tutarsızlık bulduk. Detayları görmek ve Trendyol'a itiraz taslağını almak için sonuçları kaydedin.`
+      : `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde incelediğimiz ${Math.max(analiz?.groupedOrders.length ?? 1, 1)} işlemde tutarsızlık bulunmadı.`;
     month: 'long',
     year: 'numeric',
   });
@@ -323,16 +332,7 @@ export default function ExcelUploadPage() {
               accept=".xlsx,.xls,.csv"
               onChange={handleInputChange}
               className="hidden"
-            />
-          </div>
-        )}
-
-        {/* Parsing */}
-        {step === 'parsing' && (
-          <div className="flex flex-col items-center py-20">
-            <Loader2 size={32} className="animate-spin text-hb-primary" />
-            <p className="mt-4 text-sm text-hb-muted">Dosya analiz ediliyor…</p>
-                      {/* Summary */}
+                        {/* Summary */}
             <div className="rounded-2xl border border-hb-border bg-hb-surface p-6 sm:p-8">
               <div className="flex items-center gap-2 text-sm text-hb-muted">
                 <CheckCircle2 size={16} className="text-hb-primary" />
@@ -356,6 +356,28 @@ export default function ExcelUploadPage() {
                     {analiz.cezaSayisi}
                   </p>
                   <p className="mt-1 text-xs text-hb-muted">Ceza/operasyonel</p>
+                </div>
+              </div>
+            </div>
+
+            {(parseError || analiz) && (
+              <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
+                    {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
+                      {resultCardTitle}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Fark listesi */}
+            {analiz.farklar.length > 0 && (
                 </div>
               </div>
             </div>
