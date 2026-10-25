@@ -367,22 +367,20 @@ export default function ExcelUploadPage() {
               </div>
             </div>
 
-            {/* Result card */}
-            {((analiz.farklar.length > 0) || parseError) && (
-              <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
-                    {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
-                      {resultCardTitle}
-                    </p>
-                    <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
-                  </div>
+            {/* Result card — tüm kullanıcılarda görünür */}
+            <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
+                  {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
+                    {resultCardTitle}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Fark listesi */}
             {analiz.farklar.length > 0 && (
