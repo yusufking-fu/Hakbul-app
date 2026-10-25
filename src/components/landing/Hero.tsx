@@ -40,8 +40,3 @@ export default function Hero() {
     </section>
   );
 }
-        </div>
-      </div>
-    </section>
-  );
-}

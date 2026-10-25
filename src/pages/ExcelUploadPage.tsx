@@ -237,43 +237,15 @@ export default function ExcelUploadPage() {
         }
       }
 
-                const periodLabel = new Date().toLocaleDateString('tr-TR', {
-    month: 'long',
-    year: 'numeric',
-  });
+      setStep('done');
+      setTimeout(() => navigate('/dashboard'), 1500);
+    } catch {
+      setSaveError('Beklenmeyen bir hata oluştu.');
+      setStep('parsed');
+    }
+  };
 
-  const uniqueOrderCount = new Set(
-    (analiz?.farklar ?? []).filter((f) => f.siparisNo && f.siparisNo !== '—').map((f) => f.siparisNo)
-  ).size;
-
-  const resultCardTitle = parseError
-    ? 'Dosya tamamlanamadı'
-    : 'Kontrol tamamlandı';
-
-  const resultCardMessage = parseError
-    ? "Trendyol'dan Cari Hesap Ekstresi'ni yeniden indirip tekrar yükleyin."
-    : analiz && analiz.farklar.length > 0
-      ? `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde ${uniqueOrderCount || analiz.farklar.length} siparişte toplam ₺${formatTL(analiz.toplamFark)} tutarsızlık bulduk. Detayları görmek ve Trendyol'a itiraz taslağını almak için sonuçları kaydedin.`
-      : `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde incelediğimiz ${Math.max(analiz?.groupedOrders.length ?? 1, 1)} işlemde tutarsızlık bulunmadı.`;
-    month: 'long',
-    year: 'numeric',
-  });
-
-  const uniqueOrderCount = new Set(
-    (analiz?.farklar ?? []).filter((f) => f.siparisNo && f.siparisNo !== '—').map((f) => f.siparisNo)
-  ).size;
-
-  const resultCardTitle = parseError
-    ? 'Dosya tamamlanamadı'
-    : 'Kontrol tamamlandı';
-
-  const resultCardMessage = parseError
-    ? "Trendyol'dan Cari Hesap Ekstresi'ni yeniden indirip tekrar yükleyin."
-    : analiz && analiz.farklar.length > 0
-      ? `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde ${uniqueOrderCount || analiz.farklar.length} siparişte toplam ₺${formatTL(analiz.toplamFark)} tutarsızlık bulduk. Detayları görmek ve Trendyol'a itiraz taslağını almak için sonuçları kaydedin.`
-      : `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde incelediğimiz ${Math.max(analiz?.groupedOrders.length ?? 1, 1)} işlemde tutarsızlık bulunmadı.`;
-
-  return (
+  const periodLabel = new Date().toLocaleDateString('tr-TR', {
     month: 'long',
     year: 'numeric',
   });
@@ -332,76 +304,35 @@ export default function ExcelUploadPage() {
               accept=".xlsx,.xls,.csv"
               onChange={handleInputChange}
               className="hidden"
-                        {/* Summary */}
-            <div className="rounded-2xl border border-hb-border bg-hb-surface p-6 sm:p-8">
-              <div className="flex items-center gap-2 text-sm text-hb-muted">
-                <CheckCircle2 size={16} className="text-hb-primary" />
-                {fileName} yüklendi
-              </div>
-              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-secondary">
-                    {analiz.farkSayisi}
-                  </p>
-                  <p className="mt-1 text-xs text-hb-muted">Fark sayısı</p>
-                </div>
-                <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-primary">
-                    {formatTL(analiz.toplamFark)}
-                  </p>
-                  <p className="mt-1 text-xs text-hb-muted">Toplam fark</p>
-                </div>
-                <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-muted">
-                    {analiz.cezaSayisi}
-                  </p>
-                  <p className="mt-1 text-xs text-hb-muted">Ceza/operasyonel</p>
-                </div>
+            />
+          </div>
+        )}
+
+        {/* Parsing */}
+        {step === 'parsing' && (
+          <div className="flex flex-col items-center py-20 text-center">
+            <Loader2 size={32} className="animate-spin text-hb-primary" />
+            <p className="mt-4 text-sm text-hb-muted">Dosya analiz ediliyor…</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {step === 'error' && parseError && (
+          <div className="rounded-2xl border border-hb-secondary/30 bg-hb-secondary/5 p-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="mt-0.5 shrink-0 text-hb-secondary" />
+              <div>
+                <p className="font-serif text-lg font-semibold text-hb-text">Dosya okunamadı</p>
+                <p className="mt-2 text-sm text-hb-muted">{parseError.message}</p>
               </div>
             </div>
-
-            {(parseError || analiz) && (
-              <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
-                    {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
-                      {resultCardTitle}
-                    </p>
-                    <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Fark listesi */}
-            {analiz.farklar.length > 0 && (
-                </div>
-              </div>
-            </div>
-
-            {((analiz.farklar.length > 0) || parseError) && (
-              <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
-                    {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
-                      {resultCardTitle}
-                    </p>
-                    <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Fark listesi */}
-            {analiz.farklar.length > 0 && (
-              </div>
-            </div>
+            <button
+              onClick={() => { setStep('idle'); setParseError(null); }}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-hb-border px-4 py-2 text-sm text-hb-text transition-colors hover:border-hb-muted"
+            >
+              <ArrowLeft size={16} />
+              Geri dön
+            </button>
           </div>
         )}
 
@@ -435,6 +366,23 @@ export default function ExcelUploadPage() {
                 </div>
               </div>
             </div>
+
+            {/* Result card */}
+            {((analiz.farklar.length > 0) || parseError) && (
+              <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
+                    {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
+                      {resultCardTitle}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Fark listesi */}
             {analiz.farklar.length > 0 && (

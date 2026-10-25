@@ -37,15 +37,3 @@ export default function LandingPage() {
     </div>
   );
 }
-      <Hero />
-      <ProblemSection />
-      <HowItWorks />
-      <FeaturesSection />
-      <DashboardPreview />
-      <PricingSection />
-      <FAQSection />
-      <FinalCTA />
-      <Footer />
-    </div>
-  );
-}
