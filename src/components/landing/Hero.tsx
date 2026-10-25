@@ -32,15 +32,15 @@ export default function Hero() {
           <ArrowRight size={18} />
         </Link>
 
-        <div className="mt-6 inline-flex items-center gap-3 rounded-xl border border-hb-border bg-hb-surface px-5 py-3 shadow-sm transition-colors hover:border-hb-primary/40 sm:gap-3.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-hb-primary/10 text-hb-primary">
-            <ShieldCheck size={18} />
+        <div className="mt-8 inline-flex items-center gap-4 rounded-2xl border border-hb-border bg-hb-surface px-7 py-4 shadow-md transition-colors hover:border-hb-primary/50 sm:gap-5 sm:px-8 sm:py-5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary sm:h-14 sm:w-14">
+            <ShieldCheck size={24} className="sm:h-7 sm:w-7" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-medium text-hb-text sm:text-[15px]">
+            <p className="text-base font-semibold text-hb-text sm:text-lg">
               20+ mağaza analiz edildi
             </p>
-            <p className="text-xs text-hb-muted sm:text-sm">
+            <p className="mt-0.5 text-sm text-hb-muted sm:text-base">
               55.000₺+ eksik fark tespit edildi
             </p>
           </div>
