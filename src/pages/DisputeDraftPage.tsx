@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CircleAlert as AlertCircle, ArrowLeft, CircleCheck as CheckCircle2, Download, Info, Loader as Loader2, FileText, Clock, Eye } from 'lucide-react';
+import { CircleAlert as AlertCircle, ArrowLeft, CircleCheck as CheckCircle2, Copy, Download, Info, Loader as Loader2, FileText, Clock, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
@@ -91,6 +91,9 @@ export default function DisputeDraftPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [magazaId, setMagazaId] = useState<string | null>(null);
+  const [donemBilgi, setDonemBilgi] = useState<{ baslangic: string; bitis: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const itirazMetniRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -100,6 +103,10 @@ export default function DisputeDraftPage() {
           return;
         }
         setMagazaId(demoData.magaza_id);
+        setDonemBilgi({
+          baslangic: demoData.donem.donem_baslangic,
+          bitis: demoData.donem.donem_bitis,
+        });
 
         const itirazEdilmisIds = new Set(demoData.itirazlar.map((i) => i.fark_kalem_id));
         setExistingItirazIds(itirazEdilmisIds);
@@ -117,7 +124,7 @@ export default function DisputeDraftPage() {
             };
           });
         setOrders(disputeRows);
-        setSelectedIds(new Set(disputeRows.map((o) => o.id)));
+        setSelectedIds(new Set(disputeRows.filter((o) => o.orderNumber && o.orderNumber !== '—').map((o) => o.id)));
 
         const pastRows: PastItirazRow[] = demoData.itirazlar.map((itiraz) => {
           const kalem = demoData.farkKalemleri.find((k) => k.id === itiraz.fark_kalem_id);
@@ -160,7 +167,7 @@ export default function DisputeDraftPage() {
         // En son hakediş dönemini getir
         const { data: donem, error: donemError } = await supabase
           .from('hakedis_donemleri')
-          .select('id')
+          .select('id, donem_baslangic, donem_bitis')
           .eq('magaza_id', magaza.id)
           .order('tarama_tarihi', { ascending: false })
           .limit(1)
@@ -171,6 +178,11 @@ export default function DisputeDraftPage() {
           setLoading(false);
           return;
         }
+
+        setDonemBilgi({
+          baslangic: donem.donem_baslangic,
+          bitis: donem.donem_bitis,
+        });
 
         // Fark kalemlerini getir (sadece tutarsızlık olanlar)
         const { data: farkKalemleri, error: farkError } = await supabase
@@ -267,7 +279,7 @@ export default function DisputeDraftPage() {
           });
 
         setOrders(disputeRows);
-        setSelectedIds(new Set(disputeRows.map((o) => o.id)));
+        setSelectedIds(new Set(disputeRows.filter((o) => o.orderNumber && o.orderNumber !== '—').map((o) => o.id)));
         setExistingItirazIds(itirazEdilmisKalemIds);
         setPastItirazlar(pastRows);
         setLoading(false);
@@ -293,15 +305,79 @@ export default function DisputeDraftPage() {
     });
   };
 
+  const disputableOrders = useMemo(
+    () => orders.filter((o) => o.orderNumber && o.orderNumber !== '—'),
+    [orders]
+  );
+
+  const ineligibleOrders = useMemo(
+    () => orders.filter((o) => !o.orderNumber || o.orderNumber === '—'),
+    [orders]
+  );
+
   const selectedOrders = useMemo(
-    () => orders.filter((order) => selectedIds.has(order.id)),
-    [orders, selectedIds]
+    () => disputableOrders.filter((order) => selectedIds.has(order.id)),
+    [disputableOrders, selectedIds]
   );
 
   const totalAmount = useMemo(
     () => selectedOrders.reduce((sum, order) => sum + order.diffAmount, 0),
     [selectedOrders]
   );
+
+  const itirazMetni = useMemo(() => {
+    if (selectedOrders.length === 0) return '';
+
+    const formatDonem = (d: { baslangic: string; bitis: string }) => {
+      const bas = new Date(d.baslangic).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+      const bit = new Date(d.bitis).toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+      return `${bas} - ${bit}`;
+    };
+
+    const donemStr = donemBilgi ? formatDonem(donemBilgi) : 'belirtilen dönem';
+
+    const turSayilari = new Map<string, number>();
+    selectedOrders.forEach((o) => {
+      const t = diffTypeLabels[o.diffType] ?? 'Diğer';
+      turSayilari.set(t, (turSayilari.get(t) ?? 0) + 1);
+    });
+    const turOzeti = Array.from(turSayilari.entries()).map(([t, s]) => `${s} ${t}`).join(', ');
+
+    const toplam = selectedOrders.reduce((sum, o) => sum + o.diffAmount, 0);
+
+    const lines = selectedOrders
+      .map((o) => `- Sipariş #${o.orderNumber} (${o.productName}): ${formatTL(o.diffAmount)}`)
+      .join('\n');
+
+    return `Sayın Trendyol Satıcı Destek Ekibi,
+
+${donemStr} döneminde cari hesap ekstremde yaptığım kontrolde ${selectedOrders.length} siparişe ilişkin toplam ${formatTL(toplam)} tutarında (${turOzeti}) fark tespit ettim. İlgili kalemler aşağıdadır:
+
+${lines}
+
+Bu tutarın tarafıma mahsubunu veya iadesini talep ediyorum. Konunun incelenmesini rica ederim.
+
+İletişim bilgilerim için mağaza panelimdeki kayıtları kullanabilirsiniz.
+
+Saygılarımla`;
+  }, [selectedOrders, donemBilgi]);
+
+  const handleCopy = async () => {
+    if (!itirazMetni) return;
+    try {
+      await navigator.clipboard.writeText(itirazMetni);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      if (itirazMetniRef.current) {
+        const range = document.createRange();
+        range.selectNodeContents(itirazMetniRef.current);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+  };
 
   const handleDownload = () => {
     if (selectedOrders.length === 0) return;
@@ -490,14 +566,14 @@ export default function DisputeDraftPage() {
           </div>
         )}
 
-        {orders.length > 0 ? (
+        {disputableOrders.length > 0 ? (
           <>
             <p className="text-sm leading-relaxed text-hb-muted">
               Fark bulunan siparişler otomatik seçildi. İstemediklerini çıkarabilir, sonra itiraz oluşturup Excel'ini indirebilirsin.
             </p>
 
             <div className="mt-6 divide-y divide-hb-border overflow-hidden rounded-xl border border-hb-border bg-hb-surface">
-              {orders.map((order) => {
+              {disputableOrders.map((order) => {
                 const checked = selectedIds.has(order.id);
                 return (
                   <label
@@ -543,6 +619,35 @@ export default function DisputeDraftPage() {
               </p>
             </div>
 
+            {itirazMetni && (
+              <div className="mt-6 rounded-xl border border-hb-border bg-hb-surface p-6">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-hb-primary" />
+                    <h3 className="font-serif text-base font-semibold text-hb-text">İtiraz metni</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="inline-flex items-center gap-2 rounded-lg border border-hb-border px-3 py-1.5 text-xs font-semibold text-hb-text transition-colors hover:border-hb-primary disabled:opacity-50"
+                  >
+                    {copied ? <CheckCircle2 size={14} className="text-hb-primary" /> : <Copy size={14} />}
+                    {copied ? 'Kopyalandı' : 'Metni kopyala'}
+                  </button>
+                </div>
+                <pre
+                  ref={itirazMetniRef}
+                  tabIndex={0}
+                  className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg border border-hb-border bg-hb-bg/60 p-4 font-mono text-sm leading-relaxed text-hb-text"
+                >
+                  {itirazMetni}
+                </pre>
+                {copied && (
+                  <p className="mt-2 text-xs text-hb-primary">İtiraz metni panoya kopyalandı.</p>
+                )}
+              </div>
+            )}
+
             <div className="mt-4 flex items-center gap-2 text-xs text-hb-muted">
               <span className="rounded-md border border-hb-border px-2 py-1 font-medium">Çıktı formatı</span>
               <span>Excel (.xlsx) — cari hesap ekstresi formatında</span>
@@ -584,10 +689,57 @@ export default function DisputeDraftPage() {
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-hb-primary/10 text-hb-primary">
               <Info size={22} />
             </div>
-            <h2 className="font-serif text-lg font-semibold text-hb-text">İtiraz edilecek fark bulunamadı</h2>
-            <p className="mt-2 text-sm leading-relaxed text-hb-muted">
-              Tutar farkı olan ve henüz itiraz edilmemiş sipariş bulunmuyor.
-            </p>
+            {submitSuccess ? (
+              <>
+                <h2 className="font-serif text-lg font-semibold text-hb-text">Bekleyen fark kalmadı</h2>
+                <p className="mt-2 text-sm leading-relaxed text-hb-muted">
+                  Gönderdiğin itirazları Geçmiş İtirazlar bölümünden takip edebilirsin.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="font-serif text-lg font-semibold text-hb-text">İtiraz edilecek fark bulunamadı</h2>
+                <p className="mt-2 text-sm leading-relaxed text-hb-muted">
+                  Sipariş numarası bulunan, tutar farkı olan ve henüz itiraz edilmemiş sipariş bulunmuyor.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        {ineligibleOrders.length > 0 && (
+          <div className="mt-8 overflow-hidden rounded-xl border border-hb-border bg-hb-surface">
+            <div className="border-b border-hb-border px-5 py-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-hb-muted" />
+                <h2 className="font-serif text-base font-semibold text-hb-text">İncelenecek kalemler</h2>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-hb-muted">
+                Bu kalemler sipariş numarası olmadığı için Trendyol'a itiraz edilemez. Kendi kayıtlarınızla karşılaştırın.
+              </p>
+            </div>
+            <div className="divide-y divide-hb-border">
+              {ineligibleOrders.map((order) => (
+                <div key={order.id} className="flex items-start justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-hb-text">{order.productName}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-hb-muted/15 px-2 py-0.5 text-xs font-medium text-hb-muted">
+                        Sipariş no yok
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${diffTypeStyles[order.diffType] ?? diffTypeStyles.diger}`}
+                      >
+                        {diffTypeLabels[order.diffType] ?? 'Diğer'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-hb-secondary">
+                    {formatTL(order.diffAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

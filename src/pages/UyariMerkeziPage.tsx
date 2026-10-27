@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2, Eye } from 'lucide-react';
+import { ArrowLeft, Clock, AlertTriangle, CalendarClock, CircleX, ArrowRight, Loader2, Eye, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useDemoMode } from '@/lib/demoMode';
@@ -65,7 +65,7 @@ export default function UyariMerkeziPage() {
   const { isDemo, demoData, exitDemo } = useDemoMode();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [uyariItems, setUyariItems] = useState<UyariItem[]>([]);
+  const [allUyariItems, setAllUyariItems] = useState<UyariItem[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -94,7 +94,7 @@ export default function UyariMerkeziPage() {
           };
         });
 
-        setUyariItems(items);
+        setAllUyariItems(items);
         setLoading(false);
         return;
       }
@@ -183,12 +183,15 @@ export default function UyariMerkeziPage() {
         };
       });
 
-      setUyariItems(items);
+      setAllUyariItems(items);
       setLoading(false);
     }
 
     loadData();
   }, [user?.id, isDemo, demoData]);
+
+  const uyariItems = allUyariItems.filter((i) => i.orderNumber && i.orderNumber !== '—');
+  const incelemeItems = allUyariItems.filter((i) => !i.orderNumber || i.orderNumber === '—');
 
   const yaklasanlar = uyariItems.filter((i) => i.kalanGun > 0 && i.kalanGun <= 3);
   const normalOlanlar = uyariItems.filter((i) => i.kalanGun > 3);
@@ -253,7 +256,7 @@ export default function UyariMerkeziPage() {
             </div>
             <h2 className="font-serif text-lg font-semibold text-hb-text">Bekleyen uyarı yok</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-hb-muted">
-              İtiraz açılmamış, süresi bekleyen bir fark kalemi bulunmuyor.
+              Sipariş numarası olan, itiraz açılmamış ve süresi bekleyen bir fark kalemi bulunmuyor.
             </p>
           </div>
         ) : (
@@ -300,6 +303,44 @@ export default function UyariMerkeziPage() {
               </div>
             )}
           </>
+        )}
+
+        {incelemeItems.length > 0 && (
+          <div className="mt-8 overflow-hidden rounded-xl border border-hb-border bg-hb-surface">
+            <div className="border-b border-hb-border px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Info size={16} className="text-hb-muted" />
+                <h2 className="font-serif text-base font-semibold text-hb-text">İncelenecek kalemler</h2>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-hb-muted">
+                Bu kalemler sipariş numarası olmadığı için Trendyol'a itiraz edilemez. Kendi kayıtlarınızla karşılaştırın.
+              </p>
+            </div>
+            <div className="divide-y divide-hb-border">
+              {incelemeItems.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-hb-text">{item.productName}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-hb-muted/15 px-2 py-0.5 text-xs font-medium text-hb-muted">
+                        Sipariş no yok
+                      </span>
+                      <span className="rounded-full bg-hb-border/60 px-2 py-0.5 text-xs font-medium text-hb-muted">
+                        {diffTypeLabels[item.diffType] ?? 'Diğer'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-hb-muted">
+                      <CalendarClock size={12} />
+                      Tespit: {formatDate(item.taramaTarihi)}
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-hb-secondary">
+                    {formatTL(item.diffAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </main>
     </div>
