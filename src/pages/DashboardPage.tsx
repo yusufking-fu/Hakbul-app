@@ -201,12 +201,22 @@ export default function DashboardPage() {
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-hb-muted">
               Hakediş taraması başlatmak için önce Trendyol mağazanı bağlaman gerekiyor.
             </p>
-            <Link
-              to="/magaza-baglantisi"
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
-            >
-              Mağaza bağla <ArrowRight size={16} />
-            </Link>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link
+                to="/excel-kontrol"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-primary/40 bg-hb-primary/10 px-5 py-2.5 text-sm font-semibold text-hb-primary transition-colors hover:bg-hb-primary/20"
+              >
+                <FileSpreadsheet size={16} />
+                Excel ile kontrol et
+              </Link>
+              <Link
+                to="/magaza-baglantisi"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
+              >
+                <Store size={16} />
+                Trendyol'a bağlan
+              </Link>
+            </div>
           </div>
         </main>
       </div>
@@ -226,6 +236,22 @@ export default function DashboardPage() {
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-hb-muted">
               Bu mağaza için henüz hakediş taraması yapılmamış.
             </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link
+                to="/excel-kontrol"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-primary/40 bg-hb-primary/10 px-5 py-2.5 text-sm font-semibold text-hb-primary transition-colors hover:bg-hb-primary/20"
+              >
+                <FileSpreadsheet size={16} />
+                Excel ile kontrol et
+              </Link>
+              <Link
+                to="/magaza-baglantisi"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
+              >
+                <Store size={16} />
+                Trendyol'a bağlan
+              </Link>
+            </div>
           </div>
         </main>
       </div>
@@ -357,29 +383,47 @@ export default function DashboardPage() {
         </div>
 
         {/* Alt aksiyon */}
-        {!isTrial && (
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between">
+          {!isTrial && (
             <div className="text-xs text-hb-muted">
               {farkTuruEtiketleri[farkKalemleri[0]?.fark_turu] ?? 'Fark türü'} dahil {tutarsizlikSayisi} siparişte tutarsızlık tespit edildi.
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link
-                to="/uyari-merkezi"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-colors hover:bg-hb-secondary/20"
-              >
-                <AlertTriangle size={16} />
-                Uyarı Merkezi
-              </Link>
-              <Link
-                to="/itiraz-taslagi"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
-              >
-                <FileSpreadsheet size={16} />
-                İtiraz taslağı oluştur
-              </Link>
-            </div>
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:ml-auto">
+            <Link
+              to="/excel-kontrol"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-primary/40 bg-hb-primary/10 px-5 py-2.5 text-sm font-semibold text-hb-primary transition-colors hover:bg-hb-primary/20"
+            >
+              <FileSpreadsheet size={16} />
+              Excel ile kontrol et
+            </Link>
+            <Link
+              to="/magaza-baglantisi"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-border px-5 py-2.5 text-sm font-semibold text-hb-text transition-colors hover:border-hb-muted"
+            >
+              <Store size={16} />
+              Trendyol'a bağlan
+            </Link>
+            {!isTrial && (
+              <>
+                <Link
+                  to="/uyari-merkezi"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-secondary/40 bg-hb-secondary/10 px-5 py-2.5 text-sm font-semibold text-hb-secondary transition-colors hover:bg-hb-secondary/20"
+                >
+                  <AlertTriangle size={16} />
+                  Uyarı Merkezi
+                </Link>
+                <Link
+                  to="/itiraz-taslagi"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.99]"
+                >
+                  <FileSpreadsheet size={16} />
+                  İtiraz taslağı oluştur
+                </Link>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   );
