@@ -281,7 +281,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   // Kural 5: sipariş numarası boş "Diğer Kesinti" → ayrı fark, ceza toplamına girmez
   for (const row of noOrderRows) {
     if (detectIslemTur(row.islemTuru, row.aciklama || '') !== 'diger') continue;
-    const tutar = mutlakTurarow);
+    const tutar = mutlakTutar(row);
     if (tutar <= 0.01) continue;
     farklar.push({
       id: `excel-fark-orphan-${row.rawRowIndex}`,
