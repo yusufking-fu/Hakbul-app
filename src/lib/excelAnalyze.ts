@@ -56,6 +56,7 @@ function islemTurMatch(tur: string, keywords: string[]): boolean {
 
 const K_SATIS = ['satis', 'satisbedeli', 'urunsatis', 'cariosatis'];
 const K_KOMISYON = ['komisyon', 'komisyonbedeli'];
+const K_KOMISYON_KDV = ['komisyonkdv', 'komisyonkdvsi', 'kdvkomisyon', 'komisyonvergi'];
 const K_KOMISYON_IADE = ['komisyoniade', 'iadekomisyon', 'komisyoniade'];
 const K_KARGO = ['kargo', 'kargobedeli', 'kargoucreti'];
 const K_IADE = ['iade', 'iadebedeli', 'uruniade'];
@@ -64,10 +65,10 @@ const K_HIZMET = ['hizmet', 'hizmetbedeli', 'islemucreti'];
 const K_CEZA = ['ceza', 'cezakesintisi', 'operasyonel', 'mudahale', 'iptalceza', 'gecikme'];
 const K_DIGER = ['diger', 'other'];
 
-function detectIslemTur(tur: string, aciklama: string): string {
-  if (islemTurMatch(tur, K_CEZA)) return 'ceza';
+export function detectIslemTur(tur: string, aciklama: string): string {
   const combined = `${tur} ${aciklama}`;
   if (islemTurMatch(combined, K_KOMISYON_IADE)) return 'komisyon_iadesi';
+  if (islemTurMatch(combined, K_KOMISYON_KDV)) return 'komisyon_kdv';
   if (islemTurMatch(combined, K_KOMISYON)) return 'komisyon';
   if (islemTurMatch(combined, K_IADE_KARGO)) return 'iade_kargo';
   if (islemTurMatch(combined, K_IADE)) return 'iade';
@@ -80,24 +81,7 @@ function detectIslemTur(tur: string, aciklama: string): string {
 }
 
 function mutlakTutar(r: ExcelRow): number {
-  return Math.abs(r.tutar);
-}
-
-// "Barkod / Ürün Adı" -> barkod, ürün adı ayrımı.
-function extractBarkod(urunAdi: string | null): string | null {
-  if (!urunAdi) return null;
-  const idx = urunAdi.indexOf(' / ');
-  if (idx < 0) return null;
-  const b = urunAdi.slice(0, idx).trim();
-  return b || null;
-}
-
-function extractUrunAdi(urunAdi: string | null): string | null {
-  if (!urunAdi) return null;
-  const idx = urunAdi.indexOf(' / ');
-  if (idx < 0) return urunAdi;
-  const u = urunAdi.slice(idx + 3).trim();
-  return u || null;
+  return r.borc > 0 ? r.borc : Math.abs(r.tutar);
 }
 
 // Aynı tutarlı tekrar eden komisyon satırları oran hesabına girmez.
@@ -121,7 +105,7 @@ interface CheckResult {
   aciklama: string;
 }
 
-function checkOrder(order: GroupedOrder, referansOran: number | null): CheckResult[] {
+function checkOrder(order: GroupedOrder, referansOran: number): CheckResult[] {
   const results: CheckResult[] = [];
   const komisyonRows = order.rows.filter(
     (r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'komisyon'
@@ -131,7 +115,7 @@ function checkOrder(order: GroupedOrder, referansOran: number | null): CheckResu
   );
 
   // Kural 3: iade satışı var, komisyon iadesi yok → iade tutarı × referans oran
-  if (order.hasIade && !order.hasKomisyonIadesi && referansOran !== null) {
+  if (order.hasIade && !order.hasKomisyonIadesi) {
     const iadeTutari = iadeRows.reduce((s, r) => s + mutlakTutar(r), 0);
     const fark = iadeTutari * referansOran;
     if (fark >= 0.01) {
@@ -186,8 +170,8 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     if (!orderMap.has(key)) {
       orderMap.set(key, {
         siparisNo: key,
-        urunAdi: extractUrunAdi(row.urunAdi),
-        barkod: extractBarkod(row.urunAdi),
+        urunAdi: row.urunAdi,
+        barkod: row.urunAdi,
         rows: [],
         toplamBorc: 0,
         toplamAlacak: 0,
@@ -206,10 +190,9 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     order.toplamBorc += row.borc;
     order.toplamAlacak += row.alacak;
     order.netTutar += row.tutar;
-    if (!order.urunAdi) order.urunAdi = extractUrunAdi(row.urunAdi);
-    if (!order.barkod) order.barkod = extractBarkod(row.urunAdi);
+    if (!order.urunAdi && row.urunAdi) order.urunAdi = row.urunAdi;
     if (!order.islemTurleri.includes(detTur)) order.islemTurleri.push(detTur);
-    if (detTur === 'iade') order.hasIade = true;
+    if (detTur === 'iade' || detTur === 'iade_kargo') order.hasIade = true;
     if (detTur === 'komisyon') order.hasKomisyon = true;
     if (detTur === 'komisyon_iadesi') order.hasKomisyonIadesi = true;
     if (detTur === 'kargo') order.hasKargo = true;
@@ -223,56 +206,42 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   for (const order of groupedOrders) {
     const satis = order.rows
       .filter((r) => detectIslemTur(r.islemTuru, r.aciklama || '') === 'satis')
-      .reduce((s, r) => s + mutlakTutar(r), 0);
+      .reduce((s, r) => s + r.alacak, 0);
     if (satis <= 0.01) continue;
     const komisyon = uniqueKomisyonTutarlari(order).reduce((s, t) => s + t, 0);
     oranBilgisi.push({ order, oran: komisyon / satis, satis });
   }
 
-  // Referans oran: en sık görülen oran. Eşit sıklıkta ise toplam satış tutarı
-  // en büyük olan oran. Hâlâ eşitse (ör. aynı satış tutarı) referans belirsizdir,
-  // komisyon oranı farkı yazılmaz.
-  const oranSayac = new Map<number, { adet: number; satisToplam: number }>();
+  const oranSayac = new Map<number, number>();
   for (const b of oranBilgisi) {
     const k = Math.round(b.oran * 10000) / 10000;
-    const cur = oranSayac.get(k) || { adet: 0, satisToplam: 0 };
-    cur.adet += 1;
-    cur.satisToplam += b.satis;
-    oranSayac.set(k, cur);
+    oranSayac.set(k, (oranSayac.get(k) || 0) + 1);
   }
-  let referansOran: number | null = null;
+  let referansOran = 0;
   let enCokAdet = 0;
-  let enBuyukSatis = 0;
-  for (const [oran, { adet, satisToplam }] of [...oranSayac.entries()].sort(
-    (a, b) => a[0] - b[0]
-  )) {
-    if (adet > enCokAdet || (adet === enCokAdet && satisToplam > enBuyukSatis)) {
+  for (const [oran, adet] of oranSayac) {
+    if (adet > enCokAdet) {
       enCokAdet = adet;
-      enBuyukSatis = satisToplam;
       referansOran = oran;
-    } else if (adet === enCokAdet && satisToplam === enBuyukSatis) {
-      referansOran = null;
     }
   }
 
   // Kural 1: sipariş oranı referanstan farklıysa fark yaz
-  if (referansOran !== null) {
-    for (const b of oranBilgisi) {
-      const k = Math.round(b.oran * 10000) / 10000;
-      if (k === referansOran) continue;
-      const fark = Math.abs((b.oran - referansOran) * b.satis);
-      if (fark < 0.01) continue;
-      farklar.push({
-        id: `excel-fark-${b.order.siparisNo}-komisyon-oran`,
-        siparisNo: b.order.siparisNo,
-        urunAdi: b.order.urunAdi,
-        farkTuru: 'komisyon',
-        fark,
-        beklenenTutar: referansOran * b.satis,
-        gercekTutar: b.oran * b.satis,
-        aciklama: `Komisyon oranı %${(b.oran * 100).toFixed(1)}, referans oran %${(referansOran * 100).toFixed(1)}. Fazla kesinti: ${fark.toFixed(2)} TL.`,
-      });
-    }
+  for (const b of oranBilgisi) {
+    const k = Math.round(b.oran * 10000) / 10000;
+    if (k === referansOran) continue;
+    const fark = Math.abs((b.oran - referansOran) * b.satis);
+    if (fark < 0.01) continue;
+    farklar.push({
+      id: `excel-fark-${b.order.siparisNo}-komisyon-oran`,
+      siparisNo: b.order.siparisNo,
+      urunAdi: b.order.urunAdi,
+      farkTuru: 'komisyon',
+      fark,
+      beklenenTutar: referansOran * b.satis,
+      gercekTutar: b.oran * b.satis,
+      aciklama: `Komisyon oranı %${(b.oran * 100).toFixed(1)}, referans oran %${(referansOran * 100).toFixed(1)}. Fazla kesinti: ${fark.toFixed(2)} TL.`,
+    });
   }
 
   // Kural 2 ve 3: sipariş bazlı kontroller
@@ -312,7 +281,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   // Kural 5: sipariş numarası boş "Diğer Kesinti" → ayrı fark, ceza toplamına girmez
   for (const row of noOrderRows) {
     if (detectIslemTur(row.islemTuru, row.aciklama || '') !== 'diger') continue;
-    const tutar = mutlakTutar(row);
+    const tutar = mutlakTurarow);
     if (tutar <= 0.01) continue;
     farklar.push({
       id: `excel-fark-orphan-${row.rawRowIndex}`,
