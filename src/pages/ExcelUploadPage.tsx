@@ -686,4 +686,3 @@ function diffTypeStyle(type: DiffType) {
 }
 
 
-after commit message
