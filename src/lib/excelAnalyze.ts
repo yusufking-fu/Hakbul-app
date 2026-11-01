@@ -157,7 +157,9 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
     const detTur = detectIslemTur(row.islemTuru, row.aciklama || '');
 
     if (detTur === 'ceza') {
-      cezaRows.push(row);
+      if (!row.siparisNo || !row.siparisNo.trim()) {
+        cezaRows.push(row);
+      }
       continue;
     }
 
@@ -262,7 +264,6 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
 
   // Kural 4: sipariş numarası boş ceza → ceza/operasyonel toplamı
   for (const row of cezaRows) {
-    if (row.siparisNo && row.siparisNo.trim()) continue;
     const tutar = mutlakTutar(row);
     if (tutar <= 0.01) continue;
     cezaToplami += tutar;
@@ -296,9 +297,7 @@ export function analyzeExcelRows(rows: ExcelRow[]): AnalizSonuc {
   }
 
   const toplamFark = farklar.reduce((s, f) => s + Math.abs(f.fark), 0);
-  const cezaSayisi = cezaRows.filter(
-    (r) => !(r.siparisNo && r.siparisNo.trim()) && mutlakTutar(r) > 0.01
-  ).length;
+  const cezaSayisi = cezaRows.filter((r) => mutlakTutar(r) > 0.01).length;
 
   return {
     groupedOrders,
