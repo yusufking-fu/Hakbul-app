@@ -67,6 +67,7 @@ const K_DIGER = ['diger', 'other'];
 
 export function detectIslemTur(tur: string, aciklama: string): string {
   const combined = `${tur} ${aciklama}`;
+  if (islemTurMatch(tur, K_CEZA)) return 'ceza';
   if (islemTurMatch(combined, K_KOMISYON_IADE)) return 'komisyon_iadesi';
   if (islemTurMatch(combined, K_KOMISYON_KDV)) return 'komisyon_kdv';
   if (islemTurMatch(combined, K_KOMISYON)) return 'komisyon';
@@ -75,7 +76,6 @@ export function detectIslemTur(tur: string, aciklama: string): string {
   if (islemTurMatch(combined, K_KARGO)) return 'kargo';
   if (islemTurMatch(combined, K_HIZMET)) return 'hizmet_bedeli';
   if (islemTurMatch(combined, K_SATIS)) return 'satis';
-  if (islemTurMatch(combined, K_CEZA)) return 'ceza';
   if (islemTurMatch(combined, K_DIGER)) return 'diger';
   return 'diger';
 }
