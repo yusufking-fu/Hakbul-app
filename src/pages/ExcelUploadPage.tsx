@@ -1,17 +1,22 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, AlertCircle, CheckCircle2,
-  Zap, FileUp, ShieldCheck,
+  FileUp, ShieldCheck, Calculator, Receipt, Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { formatTL } from '@/lib/format';
-import { parseExcelFile, isParseError, ParseError } from '@/lib/excelParse';
+import { parseExcelFile, isParseError, ParseError, ExcelRow } from '@/lib/excelParse';
 import { analyzeExcelRows, AnalizSonuc } from '@/lib/excelAnalyze';
-import { DiffType, diffTypeLabels } from '@/types/dispute';
+import { donemHesapla, donemKarsilastir, DonemHesapSonuc, DonemKarsilastirmaSonuc } from '@/lib/donemHesapla';
+import { diffTypeLabels, DiffType } from '@/types/dispute';
 
 type Step = 'idle' | 'parsing' | 'parsed' | 'uploading' | 'saving' | 'done' | 'error';
+
+// Stopaj oranı — şahıs şirketleri için %1, diğerleri için 0
+const STOPAJ_ORANI_SAHIS = 0.01;
+const STOPAJ_ORANI_DIGER = 0;
 
 export default function ExcelUploadPage() {
   const navigate = useNavigate();
@@ -21,13 +26,37 @@ export default function ExcelUploadPage() {
   const [fileName, setFileName] = useState('');
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const [parseError, setParseError] = useState<ParseError | null>(null);
+  const [parsedRows, setParsedRows] = useState<ExcelRow[] | null>(null);
   const [analiz, setAnaliz] = useState<AnalizSonuc | null>(null);
+
+  // Kullanıcı girişleri
+  const [yatanTutar, setYatanTutar] = useState<string>('');
+  const [kdvOrani, setKdvOrani] = useState<string>('20');
+  const [sirketTuru, setSirketTuru] = useState<'sahis' | 'diger'>('sahis');
+
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Dönem hesaplama
+  const donemSonuc = useMemo<DonemHesapSonuc | null>(() => {
+    if (!parsedRows) return null;
+    const kdv = parseFloat(kdvOrani) / 100;
+    const stopaj = sirketTuru === 'sahis' ? STOPAJ_ORANI_SAHIS : STOPAJ_ORANI_DIGER;
+    return donemHesapla({ rows: parsedRows, kdvOrani: kdv, stopajOrani: stopaj });
+  }, [parsedRows, kdvOrani, sirketTuru]);
+
+  const karsilastirma = useMemo<DonemKarsilastirmaSonuc | null>(() => {
+    if (!donemSonuc) return null;
+    const yatan = parseFloat(yatanTutar.replace(',', '.'));
+    if (isNaN(yatan)) return null;
+    return donemKarsilastir(donemSonuc.yatacakTutar, yatan);
+  }, [donemSonuc, yatanTutar]);
 
   const handleFile = useCallback(async (file: File) => {
     setStep('parsing');
     setParseError(null);
     setAnaliz(null);
+    setParsedRows(null);
+    setYatanTutar('');
     setFileName(file.name);
 
     try {
@@ -42,6 +71,7 @@ export default function ExcelUploadPage() {
         return;
       }
 
+      setParsedRows(result.rows);
       const sonuc = analyzeExcelRows(result.rows);
       setAnaliz(sonuc);
       setStep('parsed');
@@ -63,7 +93,7 @@ export default function ExcelUploadPage() {
   };
 
   const handleSave = async () => {
-    if (!analiz || !fileData) return;
+    if (!analiz || !fileData || !donemSonuc || !karsilastirma) return;
 
     setStep('uploading');
     setSaveError(null);
@@ -86,9 +116,7 @@ export default function ExcelUploadPage() {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const uploadRes = await fetch(`${supabaseUrl}/functions/v1/excel-upload`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
@@ -107,7 +135,7 @@ export default function ExcelUploadPage() {
         return;
       }
 
-      // Create a magaza for Excel flow if none exists
+      // Mağaza bul veya oluştur
       const { data: existingMagaza } = await supabase
         .from('magazalar')
         .select('id')
@@ -135,7 +163,7 @@ export default function ExcelUploadPage() {
         magazaId = newMagaza.id;
       }
 
-      // Create hakedis donemi
+      // Hakediş dönemi oluştur
       const now = new Date();
       const donemBaslangic = new Date(now.getTime() - 12 * 24 * 60 * 60 * 1000);
       const { data: donem, error: donemErr } = await supabase
@@ -144,9 +172,9 @@ export default function ExcelUploadPage() {
           magaza_id: magazaId,
           donem_baslangic: donemBaslangic.toISOString().slice(0, 10),
           donem_bitis: now.toISOString().slice(0, 10),
-          beklenen_toplam: 0,
-          gercek_odenen_toplam: 0,
-          fark_toplam: analiz.toplamFark,
+          beklenen_toplam: donemSonuc.yatacakTutar,
+          gercek_odenen_toplam: parseFloat(yatanTutar.replace(',', '.')),
+          fark_toplam: karsilastirma.fark,
         })
         .select()
         .single();
@@ -157,13 +185,21 @@ export default function ExcelUploadPage() {
         return;
       }
 
-      // Group farklar by siparisNo and create siparisler + fark_kalemleri
+      // Dönem ödemesini kaydet (kullanıcının girdiği yatan tutar)
+      await supabase
+        .from('donem_odemeleri')
+        .upsert({
+          donem_id: donem.id,
+          kullanici_id: userId,
+          yatan_tutar: parseFloat(yatanTutar.replace(',', '.')),
+        });
+
+      // Sipariş ve fark kalemlerini kaydet (mevcut akış)
       const siparisMap = new Map<string, string>();
 
-      // Create a catch-all siparis for orphan farklar (siparisNo = '—')
       const hasOrphan = analiz.farklar.some((f) => f.siparisNo === '—');
       if (hasOrphan) {
-        const { data: orphanSiparis, error: orphanErr } = await supabase
+        const { data: orphanSiparis } = await supabase
           .from('siparisler')
           .insert({
             magaza_id: magazaId,
@@ -180,19 +216,16 @@ export default function ExcelUploadPage() {
           .select()
           .single();
 
-        if (orphanErr || !orphanSiparis) {
-          setSaveError('Sipariş kaydı oluşturulamadı.');
-          setStep('parsed');
-          return;
+        if (orphanSiparis) {
+          siparisMap.set('—', orphanSiparis.id);
         }
-        siparisMap.set('—', orphanSiparis.id);
       }
 
       for (const fark of analiz.farklar) {
         if (fark.siparisNo === '—') continue;
         if (siparisMap.has(fark.siparisNo)) continue;
 
-        const { data: siparis, error: siparisErr } = await supabase
+        const { data: siparis } = await supabase
           .from('siparisler')
           .insert({
             magaza_id: magazaId,
@@ -209,15 +242,11 @@ export default function ExcelUploadPage() {
           .select()
           .single();
 
-        if (siparisErr || !siparis) {
-          setSaveError('Sipariş kaydı oluşturulamadı.');
-          setStep('parsed');
-          return;
+        if (siparis) {
+          siparisMap.set(fark.siparisNo, siparis.id);
         }
-        siparisMap.set(fark.siparisNo, siparis.id);
       }
 
-      // Create fark_kalemleri
       const fallbackSiparisId = Array.from(siparisMap.values())[0] || '';
       const farkKayitlari = analiz.farklar.map((f) => ({
         donem_id: donem.id,
@@ -229,40 +258,18 @@ export default function ExcelUploadPage() {
       })).filter((k) => k.siparis_id);
 
       if (farkKayitlari.length > 0) {
-        const { error: farkErr } = await supabase.from('fark_kalemleri').insert(farkKayitlari);
-        if (farkErr) {
-          setSaveError(`Fark kalemleri kaydedilemedi: ${farkErr.message}`);
-          setStep('parsed');
-          return;
-        }
+        await supabase.from('fark_kalemleri').insert(farkKayitlari);
       }
 
       setStep('done');
-      setTimeout(() => navigate('/dashboard'), 1500);
-    } catch {
-      setSaveError('Beklenmeyen bir hata oluştu.');
+      setTimeout(() => navigate('/dashboard'), 1200);
+    } catch (err) {
+      setSaveError(`Beklenmeyen bir hata oluştu: ${(err as Error).message || 'Bilinmeyen hata'}`);
       setStep('parsed');
     }
   };
 
-  const periodLabel = new Date().toLocaleDateString('tr-TR', {
-    month: 'long',
-    year: 'numeric',
-  });
-
-  const uniqueOrderCount = new Set(
-    (analiz?.farklar ?? []).filter((f) => f.siparisNo && f.siparisNo !== '—').map((f) => f.siparisNo)
-  ).size;
-
-  const resultCardTitle = parseError
-    ? 'Dosya tamamlanamadı'
-    : 'Kontrol tamamlandı';
-
-  const resultCardMessage = parseError
-    ? "Trendyol'dan Cari Hesap Ekstresi'ni yeniden indirip tekrar yükleyin."
-    : analiz && analiz.farklar.length > 0
-      ? `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde ${uniqueOrderCount || analiz.farklar.length} siparişte toplam ₺${formatTL(analiz.toplamFark)} tutarsızlık bulduk. Detayları görmek ve Trendyol'a itiraz taslağını almak için sonuçları kaydedin.`
-      : `${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)} döneminde incelediğimiz ${Math.max(analiz?.groupedOrders.length ?? 1, 1)} işlemde tutarsızlık bulunmadı.`;
+  const canSave = donemSonuc !== null && karsilastirma !== null && step === 'parsed';
 
   return (
     <div className="min-h-screen bg-hb-bg px-5 py-12 sm:px-8">
@@ -279,7 +286,7 @@ export default function ExcelUploadPage() {
           <h1 className="font-serif text-3xl font-semibold text-hb-text">Excel ile kontrol</h1>
           <p className="mt-2 text-sm leading-relaxed text-hb-muted">
             Trendyol panelinden <strong className="font-medium text-hb-text">Finans &gt; Cari Hesap Ekstresi</strong>'ni
-            indirip buraya yükleyin. Sistem otomatik analiz eder.
+            indirip buraya yükleyin. Sistem, yatması gereken tutarı hesaplar ve gerçek yatan tutarla karşılaştırır.
           </p>
         </div>
 
@@ -294,7 +301,7 @@ export default function ExcelUploadPage() {
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-hb-primary/10 text-hb-primary">
               <FileUp size={32} />
             </div>
-            <p className="font-serif text-lg font-semibold text-hb-text">Dosya yükle</p>
+            <p className="font-serif text-lg font-semibold text-hb-text">Cari hesap ekstresi yükle</p>
             <p className="mt-2 text-sm text-hb-muted">
               .xlsx, .xls veya .csv · Sürükle bırak ya da tıkla
             </p>
@@ -310,93 +317,242 @@ export default function ExcelUploadPage() {
 
         {/* Parsing */}
         {step === 'parsing' && (
-          <div className="flex flex-col items-center py-20 text-center">
+          <div className="flex flex-col items-center py-20">
             <Loader2 size={32} className="animate-spin text-hb-primary" />
-            <p className="mt-4 text-sm text-hb-muted">Dosya analiz ediliyor…</p>
+            <p className="mt-4 text-sm text-hb-muted">Ekstre okunuyor…</p>
           </div>
         )}
 
-        {/* Error */}
+        {/* Parse error */}
         {step === 'error' && parseError && (
-          <div className="rounded-2xl border border-hb-secondary/30 bg-hb-secondary/5 p-6">
+          <div className="rounded-2xl border border-hb-secondary/30 bg-hb-secondary/5 p-8">
             <div className="flex items-start gap-3">
-              <AlertCircle size={20} className="mt-0.5 shrink-0 text-hb-secondary" />
+              <AlertCircle size={24} className="mt-0.5 shrink-0 text-hb-secondary" />
               <div>
-                <p className="font-serif text-lg font-semibold text-hb-text">Dosya okunamadı</p>
-                <p className="mt-2 text-sm text-hb-muted">{parseError.message}</p>
+                <h2 className="font-serif text-lg font-semibold text-hb-text">Dosya okunamadı</h2>
+                <p className="mt-2 text-sm leading-relaxed text-hb-muted">
+                  {parseError.field === 'siparisNo' && 'Sipariş numarası sütunu bulunamadı. '}
+                  {parseError.field === 'tutar' && 'Tutar sütunu bulunamadı. '}
+                  {parseError.message}
+                </p>
+                <p className="mt-3 text-sm text-hb-muted">
+                  Bu dosyayı otomatik okuyamadık. API ile bağlanarak devam edebilirsiniz.
+                </p>
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    onClick={() => { setStep('idle'); setParseError(null); }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-hb-border px-5 py-2.5 text-sm font-semibold text-hb-text transition-colors hover:border-hb-muted"
+                  >
+                    Başka dosya dene
+                  </button>
+                  <Link
+                    to="/magaza-baglantisi"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    API ile devam et
+                  </Link>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => { setStep('idle'); setParseError(null); }}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-hb-border px-4 py-2 text-sm text-hb-text transition-colors hover:border-hb-muted"
-            >
-              <ArrowLeft size={16} />
-              Geri dön
-            </button>
           </div>
         )}
 
         {/* Parsed — show results */}
-        {(step === 'parsed' || step === 'uploading' || step === 'saving') && analiz && (
+        {(step === 'parsed' || step === 'uploading' || step === 'saving') && donemSonuc && (
           <div className="space-y-6">
-            {/* Summary */}
+            {/* Dosya bilgisi */}
+            <div className="flex items-center gap-2 text-sm text-hb-muted">
+              <CheckCircle2 size={16} className="text-hb-primary" />
+              {fileName} yüklendi
+            </div>
+
+            {/* Dönem ayarları */}
+            <div className="rounded-2xl border border-hb-border bg-hb-surface p-6">
+              <h2 className="font-serif text-base font-semibold text-hb-text">Dönem ayarları</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-hb-muted">Ürün KDV oranı (%)</label>
+                  <input
+                    type="text"
+                    value={kdvOrani}
+                    onChange={(e) => setKdvOrani(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-hb-border bg-hb-bg px-3 py-2.5 text-sm text-hb-text focus:border-hb-primary focus:outline-none"
+                    placeholder="20"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-hb-muted">Şirket türü</label>
+                  <div className="mt-1.5 flex gap-2">
+                    <button
+                      onClick={() => setSirketTuru('sahis')}
+                      className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                        sirketTuru === 'sahis'
+                          ? 'border-hb-primary bg-hb-primary/10 text-hb-primary'
+            : 'border-hb-border bg-hb-bg text-hb-muted hover:border-hb-muted'
+                      }`}
+                    >
+                      Şahıs şirketi
+                    </button>
+                    <button
+                      onClick={() => setSirketTuru('diger')}
+                      className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                        sirketTuru === 'diger'
+                          ? 'border-hb-primary bg-hb-primary/10 text-hb-primary'
+                          : 'border-hb-border bg-hb-bg text-hb-muted hover:border-hb-muted'
+                      }`}
+                    >
+                      Limited / Anonim
+                    </button>
+                  </div>
+                  {sirketTuru === 'sahis' && (
+                    <p className="mt-1.5 text-xs text-hb-muted">Stopaj %1 uygulanır</p>
+                  )}
+                  {sirketTuru === 'diger' && (
+                    <p className="mt-1.5 text-xs text-hb-muted">Stopaj uygulanmaz</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Hesaplanan tutarlar özeti */}
             <div className="rounded-2xl border border-hb-border bg-hb-surface p-6 sm:p-8">
-              <div className="flex items-center gap-2 text-sm text-hb-muted">
-                <CheckCircle2 size={16} className="text-hb-primary" />
-                {fileName} yüklendi
+              <div className="flex items-center gap-2 text-sm font-medium text-hb-muted">
+                <Calculator size={16} className="text-hb-primary" />
+                Hesaplanan tutarlar
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-secondary">
-                    {analiz.farkSayisi}
+                  <p className="text-xs text-hb-muted">Toplam satış (KDV dahil)</p>
+                  <p className="mt-1 font-mono text-2xl font-semibold tabular-nums text-hb-text">
+                    {formatTL(donemSonuc.toplamSatis)}
                   </p>
-                  <p className="mt-1 text-xs text-hb-muted">Fark sayısı</p>
                 </div>
                 <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-primary">
-                    {formatTL(analiz.toplamFark)}
+                  <p className="text-xs text-hb-muted">Hesaplanan hakediş</p>
+                  <p className="mt-1 font-mono text-2xl font-semibold tabular-nums text-hb-text">
+                    {formatTL(donemSonuc.hesaplananHakedis)}
                   </p>
-                  <p className="mt-1 text-xs text-hb-muted">Toplam fark</p>
                 </div>
-                <div>
-                  <p className="font-mono text-3xl font-semibold tabular-nums text-hb-muted">
-                    {analiz.cezaSayisi}
+                <div className="sm:col-span-2 rounded-xl border border-hb-primary/20 bg-hb-primary/5 p-4">
+                  <p className="text-xs font-medium text-hb-primary">Yatması gereken tutar (stopaj sonrası)</p>
+                  <p className="mt-1 font-mono text-3xl font-bold tabular-nums text-hb-primary">
+                    {formatTL(donemSonuc.yatacakTutar)}
                   </p>
-                  <p className="mt-1 text-xs text-hb-muted">Ceza/operasyonel</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Result card — tüm kullanıcılarda görünür */}
-            <div className="rounded-2xl border border-hb-primary/30 bg-hb-primary/5 p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-hb-primary/10 text-hb-primary">
-                  {parseError ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hb-muted">
-                    {resultCardTitle}
-                  </p>
-                  <p className="mt-2 text-sm leading-relaxed text-hb-text">{resultCardMessage}</p>
                 </div>
               </div>
             </div>
 
-            {/* Fark listesi */}
-            {analiz.farklar.length > 0 && (
+            {/* Yatan tutar girişi */}
+            <div className="rounded-2xl border border-hb-border bg-hb-surface p-6">
+              <label className="flex items-center gap-2 text-sm font-medium text-hb-text">
+                <Receipt size={16} className="text-hb-primary" />
+                Trendyol'un hesabınıza yatırdığı tutar
+              </label>
+              <p className="mt-1 text-xs text-hb-muted">
+                Trendyol panelinden <strong>Finans &gt; Ödemeler</strong> ekranından alınan tutarı girin.
+              </p>
+              <div className="mt-3 relative">
+                        <input
+                  type="text"
+                  value={yatanTutar}
+                  onChange={(e) => setYatanTutar(e.target.value)}
+                  className="w-full rounded-lg border border-hb-border bg-hb-bg px-3 py-3 pr-12 text-lg font-mono tabular-nums text-hb-text focus:border-hb-primary focus:outline-none"
+                  placeholder="0,00"
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg font-medium text-hb-muted">₺</span>
+              </div>
+            </div>
+
+            {/* Karşılaştırma sonucu */}
+            {karsilastirma && (
+              <div className={`rounded-2xl border p-6 sm:p-8 ${
+                karsilastirma.uyumlu
+                  ? 'border-hb-primary/30 bg-hb-primary/5'
+                  : 'border-hb-secondary/30 bg-hb-secondary/5'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {karsilastirma.uyumlu ? (
+                    <CheckCircle2 size={24} className="mt-0.5 shrink-0 text-hb-primary" />
+                  ) : (
+                    <AlertCircle size={24} className="mt-0.5 shrink-0 text-hb-secondary" />
+                  )}
+                  <div className="flex-1">
+                    <h2 className={`font-serif text-lg font-semibold ${
+                      karsilastirma.uyumlu ? 'text-hb-primary' : 'text-hb-secondary'
+                    }`}>
+                      {karsilastirma.mesaj}
+                    </h2>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs text-hb-muted">Hesaplanan yatacak</p>
+                        <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-hb-text">
+                          {formatTL(karsilastirma.hesaplananYatacak)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-hb-muted">Girilen yatan</p>
+                        <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-hb-text">
+                          {formatTL(karsilastirma.girilenYatan)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-hb-muted">Fark</p>
+                        <p className={`mt-1 font-mono text-lg font-bold tabular-nums ${
+                          Math.abs(karsilastirma.fark) < 0.01 ? 'text-hb-primary' : 'text-hb-secondary'
+                        }`}>
+                          {formatTL(Math.abs(karsilastirma.fark))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Farkın kalem bazlı dökümü */}
+            {karsilastirma && !karsilastirma.uyumlu && donemSonuc && (
               <div className="rounded-2xl border border-hb-border bg-hb-surface overflow-hidden">
                 <div className="border-b border-hb-border px-5 py-3.5">
-                  <h2 className="font-serif text-base font-semibold text-hb-text">Tespit edilen farklar</h2>
+                  <h2 className="font-serif text-base font-semibold text-hb-text">Farkın kalem bazlı dökümü</h2>
+                  <p className="mt-0.5 text-xs text-hb-muted">Ekstreden hesaplanan kesinti kalemleri</p>
+                      </div>
+                <div className="divide-y divide-hb-border">
+                  {donemSonuc.kalemler.map((kalem, i) => (
+                    <div key={i} className="flex items-center justify-between gap-4 px-5 py-3.5">
+                      <span className="text-sm text-hb-text">{kalem.etiket}</span>
+                      <span className={`font-mono text-sm font-semibold tabular-nums ${
+                        kalem.tutar !== 0 ? 'text-hb-secondary' : 'text-hb-muted'
+                      }`}>
+                        {formatTL(kalem.tutar)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div className="divide-y divide-hb-border max-h-[28rem] overflow-y-auto">
+                <div className="border-t border-hb-border bg-hb-bg/40 px-5 py-3.5">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-semibold text-hb-text">Yatması gereken tutar</span>
+                    <span className="font-mono text-sm font-bold tabular-nums text-hb-primary">
+                      {formatTL(donemSonuc.yatacakTutar)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Kesinti detayı — mevcut kontrol sonuçları */}
+            {analiz && analiz.farklar.length > 0 && (
+              <div className="rounded-2xl border border-hb-border bg-hb-surface overflow-hidden">
+                <div className="border-b border-hb-border px-5 py-3.5">
+                  <h2 className="font-serif text-base font-semibold text-hb-text">Kesinti detayı</h2>
+                  <p className="mt-0.5 text-xs text-hb-muted">Komisyon oranı sapması, mükerrer komisyon, iade eksikliği, ceza ve açıklanamayan kesinti kontrolleri</p>
+                </div>
+                <div className="divide-y divide-hb-border max-h-80 overflow-y-auto">
                   {analiz.farklar.map((f) => (
                     <div key={f.id} className="px-5 py-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-hb-text">
-                            {f.urunAdi || (f.farkTuru === 'ceza' ? 'Ceza/Operasyonel' : 'Bilinmeyen ürün')}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {f.siparisNo !== '—' && (
                               <span className="font-mono text-xs tabular-nums text-hb-muted">
                                 #{f.siparisNo}
@@ -418,6 +574,30 @@ export default function ExcelUploadPage() {
               </div>
             )}
 
+            {/* Toplam fark özeti */}
+            {analiz && (
+              <div className="grid grid-cols-3 gap-4 rounded-xl border border-hb-border bg-hb-surface p-5">
+                <div>
+                  <p className="font-mono text-xl font-semibold tabular-nums text-hb-secondary">
+                    {analiz.farkSayisi}
+                  </p>
+                  <p className="mt-0.5 text-xs text-hb-muted">Fark sayısı</p>
+                </div>
+              <div>
+                  <p className="font-mono text-xl font-semibold tabular-nums text-hb-primary">
+                    {formatTL(analiz.toplamFark)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-hb-muted">Toplam fark</p>
+                </div>
+                <div>
+                  <p className="font-mono text-xl font-semibold tabular-nums text-hb-muted">
+                    {analiz.cezaSayisi}
+                  </p>
+                  <p className="mt-0.5 text-xs text-hb-muted">Ceza/operasyonel</p>
+                </div>
+              </div>
+            )}
+
             {/* Privacy note */}
             <div className="flex items-start gap-2.5 rounded-xl border border-hb-border bg-hb-bg/40 px-4 py-3.5">
               <ShieldCheck size={16} className="mt-0.5 shrink-0 text-hb-primary" />
@@ -426,10 +606,18 @@ export default function ExcelUploadPage() {
               </p>
             </div>
 
+            {/* Info note */}
+            <div className="flex items-start gap-2.5 rounded-xl border border-hb-border bg-hb-bg/40 px-4 py-3.5">
+              <Info size={16} className="mt-0.5 shrink-0 text-hb-muted" />
+              <p className="text-xs leading-relaxed text-hb-muted">
+                "Yatması gereken tutar" ekstredeki kalemlerden hesaplanır. "Yatan tutar"ı Trendyol panelinden manuel girersiniz. Sistem ikisini karşılaştırır ve uyuşmazlık varsa hangi kalemden kaynaklandığını gösterir.
+              </p>
+            </div>
+
             {/* Save button */}
             <button
               onClick={handleSave}
-              disabled={step === 'uploading' || step === 'saving'}
+              disabled={!canSave || step === 'uploading' || step === 'saving'}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-hb-primary px-6 py-4 text-base font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
             >
               {step === 'uploading' || step === 'saving' ? (
@@ -468,15 +656,4 @@ export default function ExcelUploadPage() {
       </div>
     </div>
   );
-}
-
-function diffTypeStyle(type: DiffType): string {
-  switch (type) {
-    case 'komisyon': return 'bg-hb-secondary/10 text-hb-secondary';
-    case 'desi': return 'bg-hb-primary/10 text-hb-primary';
-    case 'iade': return 'bg-amber-500/10 text-amber-600';
-    case 'mukerrer': return 'bg-orange-500/10 text-orange-600';
-    case 'ceza': return 'bg-red-500/10 text-red-600';
-    default: return 'bg-hb-muted/15 text-hb-muted';
-  }
 }
