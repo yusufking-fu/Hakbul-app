@@ -66,14 +66,26 @@ export default function ExcelUploadPage() {
       const result = parseExcelFile(buffer);
 
       if (isParseError(result)) {
+        setParsedRows(null);
+        setAnaliz(null);
         setParseError(result);
         setStep('error');
         return;
       }
 
-      setParsedRows(result.rows);
-      const sonuc = analyzeExcelRows(result.rows);
+      const nextRows = result.rows ?? [];
+      if (!Array.isArray(nextRows) || nextRows.length === 0) {
+        setParseError({ field: 'veri', message: 'Dosyada veri satırı bulunamadı.' });
+        setStep('error');
+        return;
+      }
+
+      setParsedRows(nextRows);
+      const sonuc = analyzeExcelRows(nextRows);
       setAnaliz(sonuc);
+
+      // Parse ve analiz başarılı olduğunda sonuç ekranının görünmesi için
+      // step='parsed' ve donemSonuc değeri hazır olmalıdır.
       setStep('parsed');
     } catch {
       setParseError({ field: 'dosya', message: 'Dosya okunamadı. .xlsx, .xls veya .csv formatında olduğundan emin olun.' });
@@ -347,7 +359,7 @@ export default function ExcelUploadPage() {
                   </button>
                   <Link
                     to="/magaza-baglantisi"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-hb-primary px-5 py-2.5 text-sm font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.01]"
                   >
                     API ile devam et
                   </Link>
@@ -388,7 +400,7 @@ export default function ExcelUploadPage() {
                       className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                         sirketTuru === 'sahis'
                           ? 'border-hb-primary bg-hb-primary/10 text-hb-primary'
-            : 'border-hb-border bg-hb-bg text-hb-muted hover:border-hb-muted'
+                          : 'border-hb-border bg-hb-bg text-hb-muted hover:border-hb-muted'
                       }`}
                     >
                       Şahıs şirketi
@@ -452,7 +464,7 @@ export default function ExcelUploadPage() {
                 Trendyol panelinden <strong>Finans &gt; Ödemeler</strong> ekranından alınan tutarı girin.
               </p>
               <div className="mt-3 relative">
-                        <input
+                <input
                   type="text"
                   value={yatanTutar}
                   onChange={(e) => setYatanTutar(e.target.value)}
@@ -516,7 +528,7 @@ export default function ExcelUploadPage() {
                 <div className="border-b border-hb-border px-5 py-3.5">
                   <h2 className="font-serif text-base font-semibold text-hb-text">Farkın kalem bazlı dökümü</h2>
                   <p className="mt-0.5 text-xs text-hb-muted">Ekstreden hesaplanan kesinti kalemleri</p>
-                      </div>
+                </div>
                 <div className="divide-y divide-hb-border">
                   {donemSonuc.kalemler.map((kalem, i) => (
                     <div key={i} className="flex items-center justify-between gap-4 px-5 py-3.5">
@@ -583,7 +595,7 @@ export default function ExcelUploadPage() {
                   </p>
                   <p className="mt-0.5 text-xs text-hb-muted">Fark sayısı</p>
                 </div>
-              <div>
+                <div>
                   <p className="font-mono text-xl font-semibold tabular-nums text-hb-primary">
                     {formatTL(analiz.toplamFark)}
                   </p>
@@ -610,7 +622,7 @@ export default function ExcelUploadPage() {
             <div className="flex items-start gap-2.5 rounded-xl border border-hb-border bg-hb-bg/40 px-4 py-3.5">
               <Info size={16} className="mt-0.5 shrink-0 text-hb-muted" />
               <p className="text-xs leading-relaxed text-hb-muted">
-                "Yatması gereken tutar" ekstredeki kalemlerden hesaplanır. "Yatan tutar"ı Trendyol panelinden manuel girersiniz. Sistem ikisini karşılaştırır ve uyuşmazlık varsa hangi kalemden kaynaklandığını gösterir.
+                "Yatması gereken tutar" ekstredeki kalemlerden hesaplanır. "Yatan tutar"ı Trendyol panelinden manuel girersiniz. Sistem ikisini karşılaştırır ve uyuşmazlık varsa hangi kalemlerin etkili olduğunu gösterir.
               </p>
             </div>
 
@@ -618,7 +630,7 @@ export default function ExcelUploadPage() {
             <button
               onClick={handleSave}
               disabled={!canSave || step === 'uploading' || step === 'saving'}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-hb-primary px-6 py-4 text-base font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-hb-primary px-6 py-4 text-base font-semibold text-hb-bg shadow-glow transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {step === 'uploading' || step === 'saving' ? (
                 <>
@@ -657,3 +669,21 @@ export default function ExcelUploadPage() {
     </div>
   );
 }
+
+function diffTypeStyle(type: DiffType) {
+  switch (type) {
+    case 'komisyon_orani':
+      return 'bg-hb-primary/10 text-hb-primary';
+    case 'mukerrer_komisyon':
+      return 'bg-hb-secondary/10 text-hb-secondary';
+    case 'iade_eksikligi':
+      return 'bg-amber-500/10 text-amber-500';
+    case 'ceza':
+      return 'bg-red-500/10 text-red-500';
+    default:
+      return 'bg-hb-muted/10 text-hb-muted';
+  }
+}
+
+
+after commit message
